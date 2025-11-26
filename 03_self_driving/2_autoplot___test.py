@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Raspbot v2 Haar Cascade 멀티스레드 기반 자율주행 코드
-카메라 캡처와 이미지 처리를 분리한 멀티스레드 버전
+Raspbot v2 자율주행 테스트 코드 (전체 기능)
+서보 모터 포함 전체 기능을 사용한 라인 트레이싱 테스트
 
 Copyright (C): 2015-2024, Shenzhen Yahboom Tech
 Modified: 2025-11-25
@@ -10,11 +10,9 @@ Modified: 2025-11-25
 ═══════════════════════════════════════════════════════════
 주요 특징:
 ═══════════════════════════════════════════════════════════
-- 카메라 캡처와 이미지 처리를 별도 스레드로 분리
-- Haar Cascade 분류기 기반 객체 검출
-- 통행금지 표지판 하단/상단 검출
-- 정지 표지판 검출
-- 멀티스레드 병렬 처리로 성능 향상
+- 서보 모터 제어 포함 (카메라 각도 조절)
+- 라인 트레이싱 기본 기능
+- 막다른 길 감지 시 서보 회전으로 대체 경로 탐색
 - 단계별 주석으로 실행 흐름 명확화
 
 ═══════════════════════════════════════════════════════════
@@ -22,15 +20,13 @@ Modified: 2025-11-25
 ═══════════════════════════════════════════════════════════
 1단계: 라이브러리 및 모듈 import
 2단계: 하드웨어 초기화 (Raspbot, 카메라, 서보)
-3단계: Haar Cascade 분류기 로딩
-4단계: 트랙바 및 윈도우 설정
-5단계: 이미지 처리 함수 정의
-6단계: 차량 제어 함수 정의
-7단계: 서보 모터 제어 함수 정의
-8단계: 방향 결정 함수 정의
-9단계: 표지판 검출 함수 정의 (멀티스레드)
-10단계: 메인 루프 실행
-11단계: 정리 및 종료
+3단계: 트랙바 및 윈도우 설정
+4단계: 이미지 처리 함수 정의
+5단계: 차량 제어 함수 정의
+6단계: 서보 모터 제어 함수 정의
+7단계: 방향 결정 함수 정의
+8단계: 메인 루프 실행
+9단계: 정리 및 종료
 """
 
 import sys
@@ -48,10 +44,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "lib", "raspbot"))
 
 import cv2
 import numpy as np
-import threading
-import time
-import RPi.GPIO as GPIO
 import random
+import time
 from Raspbot_Lib import Raspbot
 
 print("✅ 라이브러리 로딩 완료\n")
@@ -63,7 +57,7 @@ print("=" * 50)
 print("  ⚙️  설정 값 로딩 중...")
 print("=" * 50)
 
-# 기본 속도 설정
+# 기본 속도 설정 (-255 ~ 255)
 DEFAULT_SPEED_UP = 20
 DEFAULT_SPEED_DOWN = 10
 SPEED_BOOST = 15
@@ -80,10 +74,11 @@ DEFAULT_B_WEIGHT = 60
 
 # 방향 판단 임계값
 DEFAULT_DIRECTION_THRESHOLD = 35000
+DEFAULT_UP_THRESHOLD = 220000
 
 # 서보 모터 각도
-DEFAULT_SERVO_1 = 90
-DEFAULT_SERVO_2 = 25
+DEFAULT_SERVO_1 = 90  # 좌우 각도 (0~180)
+DEFAULT_SERVO_2 = 25  # 상하 각도 (0~110)
 
 # 디버그 모드
 DEBUG_MODE = True
@@ -95,6 +90,7 @@ LED_ON_START = True
 # 부저 사용
 USE_BEEP = True
 BEEP_ON_START = True
+BEEP_ON_TURN = False
 
 print("✅ 설정 값 로딩 완료\n")
 
@@ -105,6 +101,7 @@ print("=" * 50)
 print("  🔧 2단계: 하드웨어 초기화 중...")
 print("=" * 50)
 
+# Raspbot 객체 생성
 try:
     bot = Raspbot()
     print("✅ Raspbot 하드웨어 초기화 완료")
@@ -112,23 +109,31 @@ except Exception as e:
     print(f"❌ Raspbot 초기화 실패: {e}")
     sys.exit(1)
 
+# 카메라 초기화 (최신 설정 적용)
 try:
     print("\n📹 카메라 초기화 중...")
+
+    # 카메라 열기
     cap = cv2.VideoCapture(0)
 
+    # 해상도 설정
     width = 320
     height = 240
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    # 카메라 속성 설정 (최신 설정)
     cap.set(cv2.CAP_PROP_BRIGHTNESS, DEFAULT_BRIGHTNESS)
     cap.set(cv2.CAP_PROP_CONTRAST, DEFAULT_CONTRAST)
     cap.set(cv2.CAP_PROP_SATURATION, 50)
     cap.set(cv2.CAP_PROP_EXPOSURE, 100)
 
+    # 카메라 정상 동작 확인
     ret, frame = cap.read()
     if not ret or frame is None:
         raise Exception("카메라에서 프레임을 읽을 수 없습니다")
 
+    # 실제 해상도 확인
     actual_height, actual_width = frame.shape[:2]
     print(f"✅ USB 카메라 초기화 완료")
     print(f"   - 요청 해상도: {width}x{height}")
@@ -139,6 +144,7 @@ except Exception as e:
     del bot
     sys.exit(1)
 
+# 초기 하드웨어 설정
 if LED_ON_START and USE_LED_EFFECTS:
     bot.Ctrl_WQ2812_ALL(1, 2)
     print("💡 LED 초기화 완료")
@@ -154,41 +160,16 @@ bot.Ctrl_Servo(1, DEFAULT_SERVO_1)
 bot.Ctrl_Servo(2, DEFAULT_SERVO_2)
 print(f"📷 서보 모터 초기화 완료 (S1:{DEFAULT_SERVO_1}°, S2:{DEFAULT_SERVO_2}°)")
 
+# 모터 정지 상태로 초기화
 for i in range(4):
     bot.Ctrl_Muto(i, 0)
 print("🛑 모터 정지 상태로 초기화 완료\n")
 
 # ============================
-# 3단계: Haar Cascade 분류기 로딩
+# 3단계: 트랙바 및 윈도우 설정
 # ============================
 print("=" * 50)
-print("  🔍 3단계: Haar Cascade 분류기 로딩 중...")
-print("=" * 50)
-
-# Haar Cascade models 경로 설정
-no_drive_bottom_cascade_path = "./xml/obstacle.xml"
-no_drive_top_cascade_path = "./xml/stop.xml"
-stop_cascade_path = "./xml/no_drive.xml"
-
-# Haar Cascade models 로드
-no_drive_bottom_cascade = cv2.CascadeClassifier(no_drive_bottom_cascade_path)
-no_drive_top_cascade = cv2.CascadeClassifier(no_drive_top_cascade_path)
-stop_cascade = cv2.CascadeClassifier(stop_cascade_path)
-
-if no_drive_bottom_cascade.empty():
-    print("⚠️  경고: obstacle.xml을 찾을 수 없습니다.")
-if no_drive_top_cascade.empty():
-    print("⚠️  경고: stop.xml을 찾을 수 없습니다.")
-if stop_cascade.empty():
-    print("⚠️  경고: no_drive.xml을 찾을 수 없습니다.")
-
-print("✅ Haar Cascade 분류기 로딩 완료\n")
-
-# ============================
-# 4단계: 트랙바 및 윈도우 설정
-# ============================
-print("=" * 50)
-print("  🎛️  4단계: 트랙바 및 윈도우 설정 중...")
+print("  🎛️  3단계: 트랙바 및 윈도우 설정 중...")
 print("=" * 50)
 
 
@@ -204,6 +185,7 @@ cv2.namedWindow("2_frame_transformed", cv2.WINDOW_NORMAL)
 cv2.namedWindow("3_gray_frame", cv2.WINDOW_NORMAL)
 cv2.namedWindow("4_Processed Frame", cv2.WINDOW_NORMAL)
 
+# 4_Processed Frame 창을 더 크게 설정
 cv2.resizeWindow("4_Processed Frame", 640, 480)
 cv2.resizeWindow("1_Frame", 640, 480)
 
@@ -220,6 +202,9 @@ cv2.createTrackbar(
     DEFAULT_DIRECTION_THRESHOLD,
     500000,
     nothing,
+)
+cv2.createTrackbar(
+    "Up Threshold", "Camera Settings", DEFAULT_UP_THRESHOLD, 500000, nothing
 )
 cv2.createTrackbar("Brightness", "Camera Settings", DEFAULT_BRIGHTNESS, 100, nothing)
 cv2.createTrackbar("Contrast", "Camera Settings", DEFAULT_CONTRAST, 100, nothing)
@@ -239,26 +224,18 @@ cv2.createTrackbar("Gain", "Camera Settings", 20, 100, nothing)
 print("✅ 트랙바 및 윈도우 설정 완료\n")
 
 # ============================
-# 5단계: 이미지 처리 함수 정의
+# 4단계: 이미지 처리 함수 정의
 # ============================
 print("=" * 50)
-print("  🖼️  5단계: 이미지 처리 함수 정의")
+print("  🖼️  4단계: 이미지 처리 함수 정의")
 print("=" * 50)
 
 
 def weighted_gray(image, r_weight, g_weight, b_weight):
-    """
-    가중 그레이스케일 변환
-
-    처리 단계:
-    1. RGB 채널별 가중치 정규화
-    2. 가중 합산으로 그레이스케일 생성
-    """
-    sum_weight = r_weight + g_weight + b_weight
-    r_weight /= sum_weight
-    g_weight /= sum_weight
-    b_weight /= sum_weight
-
+    """가중 그레이스케일 변환"""
+    r_weight /= 100.0
+    g_weight /= 100.0
+    b_weight /= 100.0
     return cv2.addWeighted(
         cv2.addWeighted(image[:, :, 2], r_weight, image[:, :, 1], g_weight, 0),
         1.0,
@@ -275,11 +252,13 @@ def process_frame(
     프레임 처리 및 엣지 검출
 
     처리 단계:
-    1. ROI 영역 정의
-    2. 원본 프레임에 ROI 사각형 표시
-    3. 원근 변환 적용
-    4. 그레이스케일 변환
-    5. 이진화
+    1. 실제 해상도 확인
+    2. ROI 영역 정의
+    3. 원본 프레임에 ROI 사각형 표시
+    4. 원근 변환 적용
+    5. 그레이스케일 변환
+    6. 이진화
+    7. 노이즈 제거
     """
     actual_h, actual_w = frame.shape[:2]
 
@@ -307,7 +286,26 @@ def process_frame(
 
     pts = pts_src.reshape((-1, 1, 2)).astype(np.int32)
     frame_with_rect = cv2.polylines(
-        frame.copy(), [pts], isClosed=True, color=(0, 0, 255), thickness=2
+        frame.copy(), [pts], isClosed=True, color=(0, 255, 0), thickness=2
+    )
+
+    cv2.putText(
+        frame_with_rect,
+        f"Resolution: {actual_w}x{actual_h}",
+        (10, 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 255, 255),
+        1,
+    )
+    cv2.putText(
+        frame_with_rect,
+        f"ROI Top: {top_y} / Bottom: {bottom_y}",
+        (10, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 255, 255),
+        1,
     )
     cv2.imshow("1_Frame", frame_with_rect)
 
@@ -320,6 +318,10 @@ def process_frame(
 
     _, binary_frame = cv2.threshold(gray_frame, detect_value, 255, cv2.THRESH_BINARY)
 
+    kernel = np.ones((5, 5), np.uint8)
+    binary_frame = cv2.morphologyEx(binary_frame, cv2.MORPH_CLOSE, kernel)
+    binary_frame = cv2.morphologyEx(binary_frame, cv2.MORPH_OPEN, kernel)
+
     cv2.imshow("4_Processed Frame", binary_frame)
     return binary_frame
 
@@ -327,10 +329,10 @@ def process_frame(
 print("✅ 이미지 처리 함수 정의 완료\n")
 
 # ============================
-# 6단계: 차량 제어 함수 정의
+# 5단계: 차량 제어 함수 정의
 # ============================
 print("=" * 50)
-print("  🚗 6단계: 차량 제어 함수 정의")
+print("  🚗 5단계: 차량 제어 함수 정의")
 print("=" * 50)
 
 
@@ -349,7 +351,7 @@ def car_stop():
 
 
 def car_left(speed_left, speed_right):
-    """좌회전"""
+    """좌회전 (제자리 회전)"""
     bot.Ctrl_Muto(0, -speed_left)
     bot.Ctrl_Muto(1, -speed_left)
     bot.Ctrl_Muto(2, speed_right)
@@ -357,7 +359,7 @@ def car_left(speed_left, speed_right):
 
 
 def car_right(speed_left, speed_right):
-    """우회전"""
+    """우회전 (제자리 회전)"""
     bot.Ctrl_Muto(0, speed_left)
     bot.Ctrl_Muto(1, speed_left)
     bot.Ctrl_Muto(2, -speed_right)
@@ -374,232 +376,193 @@ def control_car(direction, up_speed, down_speed):
         if USE_LED_EFFECTS:
             bot.Ctrl_WQ2812_ALL(1, 1)
     elif direction == "LEFT":
-        car_left(down_speed, up_speed)
+        car_left(down_speed - 10, up_speed + 10)
         if DEBUG_MODE:
             print(f"◀️  좌회전")
         if USE_LED_EFFECTS:
             bot.Ctrl_WQ2812_ALL(1, 3)
     elif direction == "RIGHT":
-        car_right(up_speed, down_speed)
+        car_right(up_speed + 10, down_speed - 10)
         if DEBUG_MODE:
             print(f"▶️  우회전")
         if USE_LED_EFFECTS:
             bot.Ctrl_WQ2812_ALL(1, 3)
-    elif direction == "RANDOM":
-        random_direction = random.choice(["LEFT", "RIGHT"])
-        control_car(random_direction, up_speed, down_speed)
 
 
 print("✅ 차량 제어 함수 정의 완료\n")
 
 # ============================
-# 7단계: 서보 모터 제어 함수 정의
+# 6단계: 서보 모터 제어 함수 정의
 # ============================
 print("=" * 50)
-print("  📷 7단계: 서보 모터 제어 함수 정의")
+print("  📷 6단계: 서보 모터 제어 함수 정의")
 print("=" * 50)
 
 
 def rotate_servo(servo_id, angle):
-    """서보 모터 회전"""
+    """
+    서보 모터 회전
+
+    단계:
+    1. Servo 2 각도 제한 확인 (최대 110도)
+    2. 서보 모터 제어
+    """
     if servo_id == 2 and angle > 110:
         angle = 110
     bot.Ctrl_Servo(servo_id, angle)
 
 
+def rotate_servo_and_check_direction(
+    detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
+):
+    """
+    서보 모터 회전으로 대체 경로 확인
+
+    처리 단계:
+    1. 서보 모터를 180도로 회전
+    2. 새 프레임 캡처
+    3. 프레임 처리
+    4. 히스토그램 분석
+    5. 서보 모터 원위치
+    6. 최적 방향 반환
+    """
+    global cap
+
+    if DEBUG_MODE:
+        print("🔍 막다른 길 감지! 대체 경로 탐색 중...")
+
+    # 1. 서보 모터 회전
+    bot.Ctrl_Servo(1, 180)
+    bot.Ctrl_Servo(2, 100)
+    time.sleep(0.5)
+
+    # 2. 새 프레임 캡처
+    ret, frame = cap.read()
+    if not ret:
+        print("❌ 카메라에서 프레임을 읽을 수 없습니다.")
+        return "STOP"
+
+    # 3. 프레임 처리
+    processed_frame = process_frame(
+        frame, detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
+    )
+    histogram_180 = np.sum(processed_frame, axis=0)
+    length = len(histogram_180)
+
+    # 4. 히스토그램 분석
+    left = int(np.sum(histogram_180[: length // 3]))
+    center = int(np.sum(histogram_180[length // 3 : 2 * length // 3]))
+    right = int(np.sum(histogram_180[2 * length // 3 :]))
+
+    if DEBUG_MODE:
+        print(f"대체 경로 탐색 - Left: {left}, Center: {center}, Right: {right}")
+
+    # 5. 서보 모터 원위치 (트랙바 값 사용)
+    servo_1_angle = cv2.getTrackbarPos("Servo 1 Angle", "Camera Settings")
+    servo_2_angle = cv2.getTrackbarPos("Servo 2 Angle", "Camera Settings")
+    bot.Ctrl_Servo(1, servo_1_angle)
+    bot.Ctrl_Servo(2, servo_2_angle)
+    time.sleep(0.3)
+
+    # 6. 최적 방향 반환
+    if left > center and right > center:
+        if DEBUG_MODE:
+            print("✅ 중앙 경로 비어있음 -> 우회전")
+        return "RIGHT"
+
+    if DEBUG_MODE:
+        print("✅ 좌회전")
+    return "LEFT"
+
+
 print("✅ 서보 모터 제어 함수 정의 완료\n")
 
 # ============================
-# 8단계: 방향 결정 함수 정의
+# 7단계: 방향 결정 함수 정의
 # ============================
 print("=" * 50)
-print("  🧭 8단계: 방향 결정 함수 정의")
+print("  🧭 7단계: 방향 결정 함수 정의")
 print("=" * 50)
 
 
-def decide_direction(histogram, direction_threshold):
+def decide_direction(
+    histogram,
+    direction_threshold,
+    up_threshold,
+    detect_value,
+    r_weight,
+    g_weight,
+    b_weight,
+    roi_top_y,
+    roi_bottom_y,
+):
     """
     히스토그램 기반 방향 결정
 
     처리 단계:
-    1. 히스토그램을 5개 구역으로 분할
+    1. 히스토그램 6구역 분할
     2. 좌우 영역 비교
     3. 좌우 차이가 크면 회전
-    4. 그 외 직진
+    4. 중앙 막힘 시 서보 회전으로 대체 경로 탐색
+    5. 그 외 직진
     """
     length = len(histogram)
+    DIVIDE = 6
 
-    # 1. 구역 분할 (5등분)
-    left = int(np.sum(histogram[: length // 5]))
-    right = int(np.sum(histogram[4 * length // 5 :]))
+    left = int(np.sum(histogram[: length // DIVIDE]))
+    right = int(np.sum(histogram[(DIVIDE - 1) * length // DIVIDE :]))
+    center_left = int(np.sum(histogram[1 * length // DIVIDE : 3 * length // DIVIDE]))
+    center_right = int(np.sum(histogram[3 * length // DIVIDE : 5 * length // DIVIDE]))
 
     if DEBUG_MODE:
-        print(f"left: {left}, right: {right}, right - left: {right - left}")
+        print(
+            f"Left: {left:6d} | Right: {right:6d} | Diff: {right - left:6d} | Threshold: {direction_threshold}"
+        )
 
-    # 2. 좌우 차이 확인
     if abs(right - left) > direction_threshold:
-        return "LEFT" if right > left else "RIGHT"
-    else:
-        return "UP"
+        direction = "LEFT" if right > left else "RIGHT"
+        if DEBUG_MODE:
+            print(f"🔄 Turn {direction}")
+        if USE_BEEP and BEEP_ON_TURN:
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.05)
+            bot.Ctrl_BEEP_Switch(0)
+        return direction
+
+    center_diff = abs(center_left - center_right)
+
+    if center_diff < up_threshold:
+        if DEBUG_MODE:
+            print("🚫 막다른 길 감지! 대체 경로 탐색 중...")
+        car_stop()
+        time.sleep(0.3)
+        return rotate_servo_and_check_direction(
+            detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
+        )
+
+    if DEBUG_MODE:
+        print("⬆️  직진")
+    return "UP"
 
 
 print("✅ 방향 결정 함수 정의 완료\n")
 
 # ============================
-# 9단계: 표지판 검출 함수 정의 (멀티스레드)
+# 8단계: 메인 루프 실행
 # ============================
 print("=" * 50)
-print("  🚦 9단계: 표지판 검출 함수 정의 (멀티스레드)")
-print("=" * 50)
-
-
-def beep_sound():
-    """
-    부저 소리 출력 함수
-
-    처리 단계:
-    1. GPIO 설정
-    2. PWM으로 부저 제어
-    3. GPIO 정리
-    """
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BOARD)
-    GPIO.setup(32, GPIO.OUT)
-    p = GPIO.PWM(32, 440)
-    p.start(50)
-    time.sleep(0.5)
-    p.stop()
-    GPIO.cleanup()
-
-
-def draw_rectangles_and_text(frame, traffic_sign, sign_name):
-    """
-    검출된 표지판에 사각형 및 텍스트 그리기
-
-    처리 단계:
-    1. 각 표지판에 사각형 그리기
-    2. 표지판 이름 및 크기 정보 표시
-    """
-    for x, y, w, h in traffic_sign:
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
-        cv2.putText(
-            frame,
-            f"{sign_name}_({w}X{h})",
-            (x - 30, y - 10),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 0),
-            2,
-        )
-    return frame
-
-
-def detect_no_drive_bottom(frame, control_signals, r_weight, g_weight, b_weight):
-    """
-    통행금지 표지판 하단 검출 함수
-
-    처리 단계:
-    1. 그레이스케일 변환
-    2. Haar Cascade로 하단 표지판 검출
-    3. 검출 시 서보 모터 회전하여 상단 표지판 확인
-    4. 검출 결과를 control_signals에 저장
-    """
-    if no_drive_bottom_cascade.empty():
-        print("⚠️  통행금지 하단 분류기 로딩 실패")
-        return
-
-    gray = weighted_gray(frame, r_weight, g_weight, b_weight)
-    no_drive_bottom = no_drive_bottom_cascade.detectMultiScale(
-        gray, scaleFactor=1.1, minNeighbors=5
-    )
-
-    control_signals["no_drive_bottom"] = len(no_drive_bottom) > 0
-    if control_signals["no_drive_bottom"]:
-        draw_rectangles_and_text(frame, no_drive_bottom, "no_drive_bottom")
-        # 서보 모터 2를 85도로 회전하여 카메라 각도 조절
-        rotate_servo(2, 85)
-        time.sleep(1)
-        # 카메라로부터 새로운 프레임을 받아옴
-        ret, new_frame = cap.read()
-        if ret:
-            no_drive_top(new_frame, control_signals, r_weight, g_weight, b_weight)
-    else:
-        control_signals["no_drive_bottom"] = False
-
-
-def no_drive_top(frame, control_signals, r_weight, g_weight, b_weight):
-    """
-    통행금지 표지판 상단 검출 함수
-
-    처리 단계:
-    1. 그레이스케일 변환
-    2. Haar Cascade로 상단 표지판 검출
-    3. 검출 시 차량 정지 및 부저 알림
-    4. 검출 결과를 control_signals에 저장
-    """
-    if no_drive_top_cascade.empty():
-        print("⚠️  통행금지 상단 분류기 로딩 실패")
-        return
-
-    gray = weighted_gray(frame, r_weight, g_weight, b_weight)
-    no_drive_top = no_drive_top_cascade.detectMultiScale(
-        gray, scaleFactor=1.1, minNeighbors=5
-    )
-
-    control_signals["no_drive_top"] = len(no_drive_top) > 0
-    if control_signals["no_drive_top"]:
-        draw_rectangles_and_text(frame, no_drive_top, "no_drive_top")
-        car_stop()
-        beep_sound()
-    else:
-        control_signals["no_drive_bottom"] = False
-        control_signals["no_drive_top"] = False
-
-
-def detect_stop_sign(frame, control_signals, r_weight, g_weight, b_weight):
-    """
-    정지 표지판 검출 함수
-
-    처리 단계:
-    1. 그레이스케일 변환
-    2. Haar Cascade로 정지 표지판 검출
-    3. 검출 시 차량 정지
-    4. 검출 결과를 control_signals에 저장
-    """
-    if stop_cascade.empty():
-        print("⚠️  정지 표지판 분류기 로딩 실패")
-        return
-
-    gray = weighted_gray(frame, r_weight, g_weight, b_weight)
-    stop_signs = stop_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-
-    control_signals["stop"] = len(stop_signs) > 0
-    if control_signals["stop"]:
-        draw_rectangles_and_text(frame, stop_signs, "stop_signs")
-        car_stop()
-        time.sleep(0.5)
-    else:
-        control_signals["stop"] = False
-
-
-print("✅ 표지판 검출 함수 정의 완료\n")
-
-# ============================
-# 10단계: 메인 루프 실행
-# ============================
-print("=" * 50)
-print("  🚀 10단계: 메인 루프 시작")
+print("  🚀 8단계: 메인 루프 시작")
 print("=" * 50)
 print("Controls:")
 print("  ESC   : 종료")
 print("  SPACE : 일시정지")
 print("  'l'   : LED 토글")
+print("  'b'   : 부저 테스트")
 print("=" * 50)
 
 frame_count = 0
 start_time = time.time()
 led_state = LED_ON_START
-control_signals = {"no_drive_bottom": False, "no_drive_top": False, "stop": False}
 
 try:
     while True:
@@ -623,6 +586,7 @@ try:
         direction_threshold = cv2.getTrackbarPos(
             "Direction Threshold", "Camera Settings"
         )
+        up_threshold = cv2.getTrackbarPos("Up Threshold", "Camera Settings")
 
         # 카메라 속성 설정
         cap.set(cv2.CAP_PROP_BRIGHTNESS, brightness)
@@ -650,42 +614,18 @@ try:
         if DEBUG_MODE:
             print(f"\n--- Frame {frame_count} ---")
 
-        direction = decide_direction(histogram, direction_threshold)
-
-        if DEBUG_MODE:
-            print(f"#### 결정된 방향 ####: {direction}")
-
-        # 표지판 검출 (멀티스레드)
-        detect_no_drive_bottom_thread = threading.Thread(
-            target=detect_no_drive_bottom,
-            args=(frame, control_signals, r_weight, g_weight, b_weight),
+        direction = decide_direction(
+            histogram,
+            direction_threshold,
+            up_threshold,
+            detect_value,
+            r_weight,
+            g_weight,
+            b_weight,
+            roi_top_y,
+            roi_bottom_y,
         )
-        detect_stop_sign_thread = threading.Thread(
-            target=detect_stop_sign,
-            args=(frame, control_signals, r_weight, g_weight, b_weight),
-        )
-
-        detect_no_drive_bottom_thread.start()
-        detect_stop_sign_thread.start()
-
-        # 스레드 완료 대기
-        detect_no_drive_bottom_thread.join()
-        detect_stop_sign_thread.join()
-
-        time.sleep(0.1)
-
-        # 표지판에 따른 제어
-        if (
-            control_signals["no_drive_bottom"]
-            or control_signals["no_drive_top"]
-            or control_signals["stop"]
-        ):
-            if DEBUG_MODE:
-                print("🚦 표지판 검출! 정지 중...")
-        else:
-            if DEBUG_MODE:
-                print("✅ 표지판 없음. 자율주행 계속.")
-            control_car(direction, motor_up_speed, motor_down_speed)
+        control_car(direction, motor_up_speed, motor_down_speed)
 
         # FPS 계산
         if frame_count % 10 == 0:
@@ -712,6 +652,11 @@ try:
             else:
                 bot.Ctrl_WQ2812_ALL(0, 0)
                 print("💡 LED OFF")
+        elif key == ord("b"):
+            print("🔊 Beep!")
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(0)
 
         time.sleep(0.05)
 
@@ -724,11 +669,11 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================
-# 11단계: 정리 및 종료
+# 9단계: 정리 및 종료
 # ============================
 finally:
     print("\n" + "=" * 50)
-    print("  🧹 11단계: 정리 및 종료")
+    print("  🧹 9단계: 정리 및 종료")
     print("=" * 50)
 
     car_stop()

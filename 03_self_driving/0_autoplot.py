@@ -59,11 +59,12 @@ Modified: 2025-11-25
    - Motor Speed: 속도 조절
    - R/G/B Weight: 색상 가중치 (라인 색상에 맞게)
 
-2. 키보드 단축키:
-   - ESC: 종료
-   - SPACE: 일시정지
-   - 'l': LED 토글
-   - 'b': 부저 테스트
+2. Keyboard shortcuts:
+   - ESC: Exit
+   - SPACE: Pause
+   - 'm': Motor toggle (ON/OFF)
+   - 'l': LED toggle
+   - 'b': Buzzer test
 """
 
 import sys
@@ -85,7 +86,7 @@ from Raspbot_Lib import Raspbot
 # 기본 속도 설정 (-255 ~ 255)
 DEFAULT_SPEED_UP = 20  # 기본값: 100 (전진 속도)
 DEFAULT_SPEED_DOWN = 10  # 기본값: 55 (회전 시 감속)
-SPEED_BOOST = 15  # 직진 시 추가 속도
+SPEED_BOOST = 10  # 직진 시 추가 속도
 
 # 라인 검출 설정
 DEFAULT_DETECT_VALUE = 120  # 기본값: 80 (밝은 환경용 - 높게 설정)
@@ -103,7 +104,7 @@ DEFAULT_UP_THRESHOLD = 220000  # 기본값: 220000
 
 # 서보 모터 각도
 DEFAULT_SERVO_1 = 90  # 좌우 각도 (0~180)
-DEFAULT_SERVO_2 = 25  # 상하 각도 (0~110, 기본값 25)
+DEFAULT_SERVO_2 = 0  # 상하 각도 (0~110, 기본값 25)
 
 # 디버그 모드
 DEBUG_MODE = True  # True: 상세 정보 출력, False: 최소 정보만
@@ -128,14 +129,14 @@ print("=" * 50)
 # Raspbot 객체 생성
 try:
     bot = Raspbot()
-    print("✅ Raspbot 하드웨어 초기화 완료")
+    print("✅ Raspbot hardware initialized")
 except Exception as e:
-    print(f"❌ Raspbot 초기화 실패: {e}")
+    print(f"❌ Raspbot initialization failed: {e}")
     sys.exit(1)
 
 # 카메라 초기화 (07_Camera_Driving.ipynb 방식)
 try:
-    print("🔍 USB 카메라 초기화 중...")
+    print("🔍 Initializing USB camera...")
 
     # 카메라 열기 (Open the camera /dev/video0)
     cap = cv2.VideoCapture(0)
@@ -148,15 +149,15 @@ try:
 
     # ⚠️ 밝기 조절 (화면이 너무 밝은 경우 - 낮은 값으로 시작)
     cap.set(cv2.CAP_PROP_BRIGHTNESS, 0)  # 밝기: -64 ~ 64 (기본: 0, 낮게 시작)
-    cap.set(cv2.CAP_PROP_CONTRAST, 40)  # 대비: -64 ~ 64 (대비 높임)
-    cap.set(cv2.CAP_PROP_SATURATION, 50)  # 채도: 0 ~ 100
-    cap.set(cv2.CAP_PROP_EXPOSURE, 100)  # 노출: 1.0 ~ 5000 (낮게 설정)
+    cap.set(cv2.CAP_PROP_CONTRAST, 0)  # 대비: -64 ~ 64 (대비 높임)
+    cap.set(cv2.CAP_PROP_SATURATION, 0)  # 채도: 0 ~ 100
+    cap.set(cv2.CAP_PROP_EXPOSURE, 50)  # 노출: 1.0 ~ 5000 (낮게 설정)
 
-    print(f"📹 카메라 설정:")
-    print(f"   - 해상도: {width}x{height}")
-    print(f"   - 밝기: 0 (어두운 환경용)")
-    print(f"   - 대비: 40")
-    print(f"   - 노출: 100 (낮음)")
+    print(f"📹 Camera settings:")
+    print(f"   - Resolution: {width}x{height}")
+    print(f"   - Brightness: 0 (for dark environment)")
+    print(f"   - Contrast: 40")
+    print(f"   - Exposure: 100 (low)")
 
     # 추가 설정 (필요시 활성화)
     # cap.set(cv2.CAP_PROP_FPS, 30)  # 프레임레이트 설정
@@ -165,40 +166,38 @@ try:
     # 카메라 정상 동작 확인 (Reading camera data)
     ret, frame = cap.read()
     if not ret or frame is None:
-        raise Exception("카메라에서 프레임을 읽을 수 없습니다")
+        raise Exception("Cannot read frame from camera")
 
     # 실제 해상도 확인 및 전역 변수 업데이트
     actual_height, actual_width = frame.shape[:2]
     ACTUAL_WIDTH = actual_width
     ACTUAL_HEIGHT = actual_height
 
-    print(f"✅ USB 카메라 초기화 완료")
-    print(f"   - 요청 해상도: {width}x{height}")
-    print(f"   - 실제 해상도: {actual_width}x{actual_height}")
+    print(f"✅ USB camera initialized")
+    print(f"   - Requested: {width}x{height}")
+    print(f"   - Actual: {actual_width}x{actual_height}")
 
     # 실제 카메라 설정 값 확인
-    print(f"   - 실제 밝기: {int(cap.get(cv2.CAP_PROP_BRIGHTNESS))}")
-    print(f"   - 실제 대비: {int(cap.get(cv2.CAP_PROP_CONTRAST))}")
-    print(f"   - 실제 노출: {int(cap.get(cv2.CAP_PROP_EXPOSURE))}")
+    print(f"   - Actual brightness: {int(cap.get(cv2.CAP_PROP_BRIGHTNESS))}")
+    print(f"   - Actual contrast: {int(cap.get(cv2.CAP_PROP_CONTRAST))}")
+    print(f"   - Actual exposure: {int(cap.get(cv2.CAP_PROP_EXPOSURE))}")
 
     if actual_width != width or actual_height != height:
-        print(
-            f"⚠️  경고: 해상도가 다릅니다. 원근 변환 좌표를 실제 해상도에 맞게 조정합니다."
-        )
-        print(f"   → 트랙바에서 'Y Value'를 조절하여 ROI 영역을 조정하세요.")
+        print(f"⚠️  Warning: Resolution mismatch. Adjusting perspective transform.")
+        print(f"   → Adjust 'Y Value' trackbar to set ROI area.")
 
 except Exception as e:
-    print(f"\n❌ 카메라 초기화 실패: {e}\n")
+    print(f"\n❌ Camera initialization failed: {e}\n")
     print("=" * 50)
-    print("가능한 해결 방법:")
-    print("1. USB 카메라 연결 확인")
+    print("Possible solutions:")
+    print("1. Check USB camera connection")
     print("   ls /dev/video*")
-    print("\n2. 권한 확인")
+    print("\n2. Check permissions")
     print("   sudo usermod -aG video $USER")
     print("   sudo reboot")
-    print("\n3. 다른 프로그램에서 카메라 사용 중인지 확인")
+    print("\n3. Check if camera is used by another program")
     print("   sudo lsof | grep video")
-    print("\n4. 카메라 테스트")
+    print("\n4. Test camera")
     print(
         "   python3 -c \"import cv2; cap=cv2.VideoCapture(0); print('OK' if cap.read()[0] else 'FAIL'); cap.release()\""
     )
@@ -209,23 +208,23 @@ except Exception as e:
 # 초기 하드웨어 설정
 if LED_ON_START and USE_LED_EFFECTS:
     bot.Ctrl_WQ2812_ALL(1, 2)  # 파란색 LED 켜기
-    print("💡 LED 초기화 완료")
+    print("💡 LED initialized")
 
 if BEEP_ON_START and USE_BEEP:
     bot.Ctrl_BEEP_Switch(1)
     time.sleep(0.2)
     bot.Ctrl_BEEP_Switch(0)
-    print("🔊 부저 테스트 완료")
+    print("🔊 Buzzer tested")
 
 # 서보 모터 초기 위치
 bot.Ctrl_Servo(1, DEFAULT_SERVO_1)
 bot.Ctrl_Servo(2, DEFAULT_SERVO_2)
-print(f"📷 서보 모터 초기화 완료 (S1:{DEFAULT_SERVO_1}°, S2:{DEFAULT_SERVO_2}°)")
+print(f"📷 Servo motors initialized (S1:{DEFAULT_SERVO_1}°, S2:{DEFAULT_SERVO_2}°)")
 
 # 모터 정지 상태로 초기화
 for i in range(4):
     bot.Ctrl_Muto(i, 0)
-print("🛑 모터 정지 상태로 초기화 완료")
+print("🛑 Motors stopped (initial state)")
 
 
 # ============================
@@ -250,7 +249,7 @@ cv2.namedWindow("2_frame_transformed", cv2.WINDOW_NORMAL)
 cv2.namedWindow("3_gray_frame", cv2.WINDOW_NORMAL)
 cv2.namedWindow("4_Processed Frame", cv2.WINDOW_NORMAL)
 
-# 4_Processed Frame 창을 더 크게 설정 (가장 중요하므로)
+# 창 크기 설정
 cv2.resizeWindow(
     "4_Processed Frame", ACTUAL_WIDTH, ACTUAL_HEIGHT
 )  # 2배 확대 (320xACTUAL_HEIGHT → ACTUAL_WIDTHxACTUAL_HEIGHT)
@@ -270,11 +269,11 @@ cv2.createTrackbar(
 # ROI Top Y: 상단 Y 좌표 (0=화면 최상단, 높을수록 아래로)
 # 범위: 0~1000 (실제 해상도에 맞게 자동 조정됨)
 # 기본값: 0 (화면 최상단부터 시작)
-cv2.createTrackbar("ROI Top Y", "Camera Settings", 0, 1000, nothing)
+cv2.createTrackbar("ROI Top Y", "Camera Settings", 688, 1000, nothing)
 # ROI Bottom Y: 하단 Y 좌표 (0=화면 최상단, 높을수록 아래로)
 # 범위: 0~1000 (실제 해상도에 맞게 자동 조정됨)
 # 기본값: 800 (1000의 80%, 480 해상도 기준 약 384픽셀)
-cv2.createTrackbar("ROI Bottom Y", "Camera Settings", 130, 1000, nothing)
+cv2.createTrackbar("ROI Bottom Y", "Camera Settings", 883, 1000, nothing)
 cv2.createTrackbar(
     "Direction Threshold",
     "Camera Settings",
@@ -307,7 +306,7 @@ cv2.createTrackbar("B_weight", "Camera Settings", DEFAULT_B_WEIGHT, 100, nothing
 cv2.createTrackbar("Saturation", "Camera Settings", 20, 100, nothing)
 cv2.createTrackbar("Gain", "Camera Settings", 20, 100, nothing)
 
-print("🎛️  OpenCV 트랙바 설정 완료")
+print("🎛️  OpenCV trackbars configured")
 
 
 # ============================
@@ -348,6 +347,239 @@ def weighted_gray(image, r_weight, g_weight, b_weight):
         b_weight,
         0,
     )
+
+
+def draw_info_on_binary_frame(binary_frame, direction, histogram):
+    """
+    이진화 프레임에 방향 및 히스토그램 정보 표시 (개선된 버전)
+
+    Args:
+        binary_frame: 이진화된 프레임 (0=검정색 도로, 255=테두리/장애물)
+        direction: 주행 방향 ("UP", "LEFT", "RIGHT", "BLOCKED")
+        histogram: 히스토그램 배열
+
+    Returns:
+        정보가 표시된 컬러 프레임
+    """
+    # Convert binary image to color (for displaying information)
+    color_frame = cv2.cvtColor(binary_frame, cv2.COLOR_GRAY2BGR)
+
+    # Histogram analysis (divided into 3 sections)
+    length = len(histogram)
+    divide = 3  # Divide into 3 equal sections
+    section_len = length // divide
+
+    # Calculate left/center/right area sums (equal division)
+    left_sum = int(np.sum(histogram[:section_len]))  # 0 ~ 1/3
+    center_sum = int(np.sum(histogram[section_len : 2 * section_len]))  # 1/3 ~ 2/3
+    right_sum = int(np.sum(histogram[2 * section_len :]))  # 2/3 ~ 3/3
+
+    # Total sum
+    total = left_sum + center_sum + right_sum
+
+    # Calculate percentages
+    if total > 0:
+        left_pct = (left_sum / total) * 100
+        center_pct = (center_sum / total) * 100
+        right_pct = (right_sum / total) * 100
+    else:
+        left_pct = center_pct = right_pct = 0.0
+
+    # Status panel background (compact and simple)
+    panel_height = 60
+    overlay = color_frame.copy()
+    cv2.rectangle(overlay, (0, 0), (color_frame.shape[1], panel_height), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.75, color_frame, 0.25, 0, color_frame)
+
+    # Text settings
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    w = color_frame.shape[1]
+
+    # Direction display (English)
+    direction_map = {
+        "UP": "FWD",
+        "LEFT": "LEFT",
+        "RIGHT": "RIGHT",
+        "BLOCKED": "BLOCK",
+        "STOP": "STOP",
+    }
+    direction_text = direction_map.get(direction, direction)
+
+    # Direction colors
+    direction_color = {
+        "UP": (0, 255, 0),  # Green
+        "LEFT": (0, 255, 255),  # Yellow
+        "RIGHT": (0, 255, 255),  # Yellow
+        "BLOCKED": (0, 0, 255),  # Red
+        "STOP": (128, 128, 128),  # Gray
+    }.get(direction, (255, 255, 255))
+
+    # Simple one-line display
+    # Direction (굵게)
+    cv2.putText(
+        color_frame, f"Dir:{direction_text}", (10, 25), font, 0.5, direction_color, 2
+    )
+
+    # LEFT (굵게)
+    left_color = (100, 100, 255) if left_pct > 30 else (255, 255, 255)
+    left_thickness = 2 if left_pct > 30 else 2
+    cv2.putText(
+        color_frame,
+        f"L:{left_pct:.0f}%",
+        (10, 45),
+        font,
+        0.5,
+        left_color,
+        left_thickness,
+    )
+
+    # CENTER (굵게)
+    center_color = (100, 255, 100) if center_pct > 40 else (255, 255, 255)
+    cv2.putText(
+        color_frame,
+        f"C:{center_pct:.0f}%",
+        (w // 2 - 25, 45),
+        font,
+        0.5,
+        center_color,
+        2,
+    )
+
+    # RIGHT (굵게)
+    right_color = (100, 100, 255) if right_pct > 30 else (255, 255, 255)
+    right_thickness = 2 if right_pct > 30 else 2
+    cv2.putText(
+        color_frame,
+        f"R:{right_pct:.0f}%",
+        (w - 70, 45),
+        font,
+        0.5,
+        right_color,
+        right_thickness,
+    )
+
+    # Yellow dividing lines (2 lines for 3 equal sections)
+    h = color_frame.shape[0]
+    line_start_y = panel_height
+
+    # Left boundary (1/3)
+    cv2.line(
+        color_frame, (section_len, line_start_y), (section_len, h), (0, 255, 255), 2
+    )
+    # Right boundary (2/3)
+    cv2.line(
+        color_frame,
+        (2 * section_len, line_start_y),
+        (2 * section_len, h),
+        (0, 255, 255),
+        2,
+    )
+
+    return color_frame
+
+
+def draw_info_on_frame(frame, info_dict):
+    """
+    프레임에 실시간 정보 표시
+
+    ⚠️ 주의: 이 함수는 더 이상 사용되지 않습니다.
+    대신 draw_info_on_binary_frame()을 사용합니다.
+
+    Args:
+        frame: 표시할 프레임
+        info_dict: 표시할 정보 딕셔너리
+    """
+    # 반투명 배경 그리기 (상단)
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (0, 0), (frame.shape[1], 120), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+
+    # 텍스트 설정
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    thickness = 1
+    y_offset = 20
+    line_height = 20
+
+    # 방향 표시 (크게)
+    direction = info_dict.get("direction", "UNKNOWN")
+    direction_color = {
+        "UP": (0, 255, 0),  # 초록 (직진)
+        "LEFT": (0, 255, 255),  # 노란 (좌회전)
+        "RIGHT": (0, 255, 255),  # 노란 (우회전)
+        "BLOCKED": (0, 0, 255),  # 빨강 (막힘)
+        "STOP": (128, 128, 128),  # 회색 (정지)
+    }.get(direction, (255, 255, 255))
+
+    direction_text = {
+        "UP": "⬆️ 직진",
+        "LEFT": "◀️ 좌회전",
+        "RIGHT": "▶️ 우회전",
+        "BLOCKED": "🚫 막힘",
+        "STOP": "⏸️ 정지",
+    }.get(direction, direction)
+
+    cv2.putText(
+        frame, f"방향: {direction_text}", (10, y_offset), font, 0.7, direction_color, 2
+    )
+
+    # 속도 정보
+    y_offset += line_height + 10
+    speed_left = info_dict.get("speed_left", 0)
+    speed_right = info_dict.get("speed_right", 0)
+    cv2.putText(
+        frame,
+        f"속도: L={speed_left:3d} | R={speed_right:3d}",
+        (10, y_offset),
+        font,
+        font_scale,
+        (255, 255, 255),
+        thickness,
+    )
+
+    # 프레임 카운터 및 FPS
+    y_offset += line_height
+    frame_count = info_dict.get("frame_count", 0)
+    fps = info_dict.get("fps", 0.0)
+    cv2.putText(
+        frame,
+        f"Frame: {frame_count:04d} | FPS: {fps:.1f}",
+        (10, y_offset),
+        font,
+        font_scale,
+        (255, 255, 255),
+        thickness,
+    )
+
+    # 주요 변수 상태
+    y_offset += line_height
+    detect_val = info_dict.get("detect_value", 0)
+    threshold = info_dict.get("direction_threshold", 0)
+    cv2.putText(
+        frame,
+        f"Detect: {detect_val} | Threshold: {threshold//1000}k",
+        (10, y_offset),
+        font,
+        font_scale,
+        (255, 255, 255),
+        thickness,
+    )
+
+    # LED 상태
+    y_offset += line_height
+    led_status = "ON" if info_dict.get("led_enabled", True) else "OFF"
+    led_color = (0, 255, 0) if info_dict.get("led_enabled", True) else (128, 128, 128)
+    cv2.putText(
+        frame,
+        f"LED: {led_status}",
+        (10, y_offset),
+        font,
+        font_scale,
+        led_color,
+        thickness,
+    )
+
+    return frame
 
 
 def process_frame(
@@ -409,33 +641,38 @@ def process_frame(
         frame.copy(), [pts], isClosed=True, color=(0, 255, 0), thickness=2
     )
 
-    # 해상도 및 ROI 정보 표시
+    # 해상도 및 ROI 정보 표시 (크고 굵게)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.8  # 크기 증가
+    thickness = 2  # 굵기 증가
+    color = (0, 255, 255)  # 노란색
+
     cv2.putText(
         frame_with_rect,
         f"Resolution: {actual_w}x{actual_h}",
-        (10, 20),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (0, 255, 255),
-        1,
+        (10, 25),
+        font,
+        font_scale,
+        color,
+        thickness,
     )
     cv2.putText(
         frame_with_rect,
         f"ROI Top: {top_y} / Bottom: {bottom_y}",
-        (10, 40),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (0, 255, 255),
-        1,
+        (10, 55),
+        font,
+        font_scale,
+        color,
+        thickness,
     )
     cv2.putText(
         frame_with_rect,
         f"ROI Height: {bottom_y - top_y}px",
-        (10, 60),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (0, 255, 255),
-        1,
+        (10, 85),
+        font,
+        font_scale,
+        color,
+        thickness,
     )
     cv2.imshow("1_Frame", frame_with_rect)
 
@@ -448,7 +685,8 @@ def process_frame(
     gray_frame = weighted_gray(frame_transformed, r_weight, g_weight, b_weight)
     cv2.imshow("3_gray_frame", gray_frame)
 
-    # 이진화
+    # 이진화 (검정색=0, 나머지=1)
+    # detect_value보다 낮으면 0(검정색 도로), 높으면 255(테두리/장애물)
     _, binary_frame = cv2.threshold(gray_frame, detect_value, 255, cv2.THRESH_BINARY)
 
     # 노이즈 제거 (모폴로지 연산)
@@ -456,8 +694,11 @@ def process_frame(
     binary_frame = cv2.morphologyEx(binary_frame, cv2.MORPH_CLOSE, kernel)
     binary_frame = cv2.morphologyEx(binary_frame, cv2.MORPH_OPEN, kernel)
 
-    cv2.imshow("4_Processed Frame", binary_frame)
-    return binary_frame
+    # 히스토그램 계산 (반환용)
+    # 각 열의 흰색(테두리/장애물) 픽셀 수를 합산
+    histogram = np.sum(binary_frame, axis=0)
+
+    return binary_frame, histogram
 
 
 # ============================
@@ -561,50 +802,45 @@ def decide_direction(
     roi_bottom_y,
 ):
     """
-    히스토그램 기반 방향 결정
+    히스토그램 기반 방향 결정 (3등분 방식)
 
     동작 방식:
-    1. 히스토그램을 6개 구역으로 분할 (좌, 중좌, 중앙, 중우, 우)
-    2. 좌우 영역의 흰색 픽셀 합계 계산
+    1. 히스토그램을 3개 구역으로 균등 분할 (LEFT, CENTER, RIGHT)
+    2. 좌우 영역의 테두리 검출량 비교
     3. 좌우 차이가 임계값보다 크면 회전
     4. 중앙 영역이 막혀있으면 대체 경로 탐색
     5. 그 외의 경우 직진
 
     Args:
-        histogram: 이진화된 이미지의 가로 히스토그램
+        histogram: 이진화된 이미지의 가로 히스토그램 (테두리/장애물 검출)
         direction_threshold: 좌우 회전 판단 임계값
         up_threshold: 직진 가능 여부 판단 임계값
 
     Returns:
-        방향 문자열 ("UP", "LEFT", "RIGHT")
+        방향 문자열 ("UP", "LEFT", "RIGHT", "BLOCKED")
     """
     length = len(histogram)
 
-    # 히스토그램을 6개 구역으로 나눔
-    DIVIDE = 6
+    # 히스토그램을 3개 구역으로 균등 분할
+    DIVIDE = 3
+    section_len = length // DIVIDE
 
-    # 좌측 끝 영역 (0 ~ 1/6)
-    left = int(np.sum(histogram[: length // DIVIDE]))
-
-    # 우측 끝 영역 (5/6 ~ 1)
-    right = int(np.sum(histogram[(DIVIDE - 1) * length // DIVIDE :]))
-
-    # 중앙 좌측 영역 (1/6 ~ 3/6)
-    center_left = int(np.sum(histogram[1 * length // DIVIDE : 3 * length // DIVIDE]))
-
-    # 중앙 우측 영역 (3/6 ~ 5/6)
-    center_right = int(np.sum(histogram[3 * length // DIVIDE : 5 * length // DIVIDE]))
+    # 좌/중/우 영역 (각 1/3씩)
+    left = int(np.sum(histogram[:section_len]))  # 0 ~ 1/3
+    center = int(np.sum(histogram[section_len : 2 * section_len]))  # 1/3 ~ 2/3
+    right = int(np.sum(histogram[2 * section_len :]))  # 2/3 ~ 3/3
 
     if DEBUG_MODE:
         print(
-            f"Left: {left:6d} | Right: {right:6d} | Diff: {right - left:6d} | Threshold: {direction_threshold}"
+            f"Left: {left:6d} | Center: {center:6d} | Right: {right:6d} | Diff(R-L): {right - left:6d}"
         )
 
     # 좌우 차이가 큰 경우 방향 전환
+    # 우측에 테두리가 많으면 좌회전, 좌측에 테두리가 많으면 우회전
     if abs(right - left) > direction_threshold:
         direction = "LEFT" if right > left else "RIGHT"
         if DEBUG_MODE:
-            print(f"🔄 Turn {direction}")
+            print(f"🔄 Turn {direction} (edge avoidance)")
 
         # 회전 시 부저 (옵션)
         if USE_BEEP and BEEP_ON_TURN:
@@ -614,22 +850,26 @@ def decide_direction(
 
         return direction
 
-    # 중앙 영역 분석
-    center_diff = abs(center_left - center_right)
+    # 중앙 영역 체크 (테두리/장애물이 너무 많으면 막힌 것)
+    total = left + center + right
+    if total > 0:
+        center_ratio = center / total
+    else:
+        center_ratio = 0
 
-    # 앞이 막힌 경우 (라인이 거의 없음)
-    if center_diff < up_threshold:
+    # 중앙에 테두리/장애물이 너무 많으면 막힌 것으로 판단
+    if center > up_threshold:
         if DEBUG_MODE:
-            print("🚫 Dead end detected! Checking alternative routes...")
+            print(f"🚫 CENTER BLOCKED! (center={center}, threshold={up_threshold})")
         car_stop()
         time.sleep(0.3)
         return rotate_servo_and_check_direction(
             detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
         )
 
-    # 직진
+    # 직진 (중앙이 비교적 깨끗함)
     if DEBUG_MODE:
-        print("⬆️  Going straight")
+        print(f"⬆️  Going straight (center clear: {center_ratio*100:.1f}%)")
     return "UP"
 
 
@@ -647,7 +887,7 @@ def rotate_servo_and_check_direction(
     global cap
 
     if DEBUG_MODE:
-        print("🔍 막다른 길 감지! 대체 경로 탐색 중...")
+        print("🔍 Dead end detected! Searching alternative route...")
 
     # 서보 모터를 180도로 회전하여 뒤쪽 확인
     bot.Ctrl_Servo(1, 180)
@@ -657,20 +897,20 @@ def rotate_servo_and_check_direction(
     # 새 프레임 캡처
     ret, frame = cap.read()
     if not ret:
-        print("❌ 카메라에서 프레임을 읽을 수 없습니다.")
+        print("❌ Cannot read frame from camera.")
         return "STOP"
 
     # 프레임 처리
-    processed_frame = process_frame(
+    processed_frame, histogram_180 = process_frame(
         frame, detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
     )
-    histogram_180 = np.sum(processed_frame, axis=0)
     length = len(histogram_180)
 
-    # 3구역 분석
-    left = int(np.sum(histogram_180[: length // 3]))
-    center = int(np.sum(histogram_180[length // 3 : 2 * length // 3]))
-    right = int(np.sum(histogram_180[2 * length // 3 :]))
+    # 3등분 분석
+    section_len = length // 3
+    left = int(np.sum(histogram_180[:section_len]))
+    center = int(np.sum(histogram_180[section_len : 2 * section_len]))
+    right = int(np.sum(histogram_180[2 * section_len :]))
 
     if DEBUG_MODE:
         print(f"Alternative scan - Left: {left}, Center: {center}, Right: {right}")
@@ -682,20 +922,31 @@ def rotate_servo_and_check_direction(
     bot.Ctrl_Servo(2, servo_2_angle)
     time.sleep(0.3)
 
-    # 중앙이 가장 비어있으면 (값이 작으면) 직진 가능
-    if left > center and right > center:
+    # 중앙이 가장 비어있으면 (테두리가 적으면) 직진 가능
+    # 테두리가 적다 = 안전하다
+    if center < left and center < right:
         if DEBUG_MODE:
-            print("✅ Center path clear -> Turn RIGHT")
-        return "RIGHT"
+            print("✅ Center clear -> Go FORWARD")
+        return "UP"
 
-    if DEBUG_MODE:
-        print("✅ Turn LEFT")
-    return "LEFT"
+    # 좌우 비교하여 테두리가 적은 쪽으로 회전
+    if left < right:
+        if DEBUG_MODE:
+            print("✅ Left clearer -> Turn LEFT")
+        return "LEFT"
+    else:
+        if DEBUG_MODE:
+            print("✅ Right clearer -> Turn RIGHT")
+        return "RIGHT"
 
 
 def control_car(direction, up_speed, down_speed):
     """
     차량 제어 (방향에 따른 모터 제어)
+
+    ⚠️ 주의: 이 함수는 더 이상 메인 루프에서 사용되지 않습니다.
+    차량 제어 로직이 메인 루프에 직접 통합되어 LED 토글 기능과
+    실시간 정보 표시를 지원합니다.
 
     동작:
     1. "UP": 직진 (양쪽 모터 동일 속도 + 부스트)
@@ -709,31 +960,31 @@ def control_car(direction, up_speed, down_speed):
         down_speed: 회전 시 감속 속도 (0~255)
     """
     if direction == "UP":
-        # 직진: 속도 부스트 적용
+        # Forward: apply speed boost
         boosted_speed = min(up_speed + SPEED_BOOST, 255)
         car_run(boosted_speed, boosted_speed)
         if DEBUG_MODE:
-            print(f"⚡ 직진 - 속도: {boosted_speed}")
+            print(f"Forward - Speed: {boosted_speed}")
 
-        # LED: 초록색 (정상 주행)
+        # LED: Green (normal driving)
         if USE_LED_EFFECTS:
             bot.Ctrl_WQ2812_ALL(1, 1)
 
     elif direction == "LEFT":
-        # 좌회전: 왼쪽 느리게, 오른쪽 빠르게
+        # Left turn: left slow, right fast
         car_left(down_speed - 10, up_speed + 10)
         if DEBUG_MODE:
-            print(f"◀️  좌회전 - 왼쪽:{down_speed-10}, 오른쪽:{up_speed+10}")
+            print(f"Turn LEFT - L:{down_speed-10}, R:{up_speed+10}")
 
-        # LED: 노란색 (회전 중)
+        # LED: Yellow (turning)
         if USE_LED_EFFECTS:
             bot.Ctrl_WQ2812_ALL(1, 3)
 
     elif direction == "RIGHT":
-        # 우회전: 왼쪽 빠르게, 오른쪽 느리게
+        # Right turn: left fast, right slow
         car_right(up_speed + 10, down_speed - 10)
         if DEBUG_MODE:
-            print(f"▶️  우회전 - 왼쪽:{up_speed+10}, 오른쪽:{down_speed-10}")
+            print(f"Turn RIGHT - L:{up_speed+10}, R:{down_speed-10}")
 
         # LED: 노란색 (회전 중)
         if USE_LED_EFFECTS:
@@ -743,7 +994,7 @@ def control_car(direction, up_speed, down_speed):
         # 무작위 방향 (막다른 길 탈출용)
         random_direction = random.choice(["LEFT", "RIGHT"])
         if DEBUG_MODE:
-            print(f"🎲 무작위 방향: {random_direction}")
+            print(f"Random direction: {random_direction}")
         control_car(random_direction, up_speed, down_speed)
 
 
@@ -757,13 +1008,44 @@ print("=" * 50)
 print("Controls:")
 print("  ESC   : Quit")
 print("  SPACE : Pause/Debug")
-print("  'l'   : Toggle LED")
+print("  'l'   : Toggle LED Bar")
 print("  'b'   : Test Beep")
+print("=" * 50)
+print("\n📺 Display Info:")
+print("  - 1_Frame: Original video + ROI")
+print("  - 4_Processed Frame: Binary + Status panel")
+print("    * Binary: 0=Road(black), 1=Edge/Obstacle(white)")
+print("    * Direction: FORWARD/LEFT TURN/RIGHT TURN/BLOCKED")
+print("    * L/C/R: Edge detection distribution %")
+print("    * Division lines: Yellow")
+print("=" * 50)
+print("\n💡 LED Bar Toggle:")
+print("  - 'l' key: Toggle LED Bar on/off")
+print("  - Enabled: Auto color change by driving state")
+print("  - Disabled: Always off")
 print("=" * 50)
 
 frame_count = 0
 start_time = time.time()
 led_state = LED_ON_START
+led_enabled = True  # LED enabled state (toggle)
+motor_enabled = True  # Motor enabled state (toggle) - START ENABLED
+current_direction = "STOP"
+current_speed_left = 0
+current_speed_right = 0
+fps = 0.0
+
+print("\n" + "=" * 50)
+print("  🚗 Raspbot Autopilot Starting...")
+print("=" * 50)
+print("✅ MOTOR ENABLED (Press 'm' to stop)")
+print("\nKeyboard Controls:")
+print("  ESC   : Exit")
+print("  SPACE : Pause")
+print("  'm'   : Motor toggle (ON/OFF)")
+print("  'l'   : LED toggle")
+print("  'b'   : Buzzer test")
+print("=" * 50 + "\n")
 
 try:
     while True:
@@ -806,10 +1088,9 @@ try:
         rotate_servo(2, servo_2_angle)
 
         # 프레임 처리
-        processed_frame = process_frame(
+        processed_frame, histogram = process_frame(
             frame, detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
         )
-        histogram = np.sum(processed_frame, axis=0)
 
         # 방향 결정 및 제어
         if DEBUG_MODE:
@@ -826,40 +1107,123 @@ try:
             roi_top_y,
             roi_bottom_y,
         )
-        control_car(direction, motor_up_speed, motor_down_speed)
+        current_direction = direction
+
+        # Motor control (check if motor enabled)
+        if not motor_enabled:
+            # Motor disabled - stop
+            car_stop()
+            current_speed_left = 0
+            current_speed_right = 0
+
+        elif direction == "UP":
+            # Forward
+            boosted_speed = min(motor_up_speed + SPEED_BOOST, 255)
+            car_run(boosted_speed, boosted_speed)
+            current_speed_left = boosted_speed
+            current_speed_right = boosted_speed
+
+            # LED: Green (normal driving) - only if LED enabled
+            if USE_LED_EFFECTS and led_enabled:
+                bot.Ctrl_WQ2812_ALL(1, 1)
+            if DEBUG_MODE:
+                print(f"Forward - Speed: {boosted_speed}")
+
+        elif direction == "LEFT":
+            # Turn left
+            left_speed = motor_down_speed - 10
+            right_speed = motor_up_speed + 10
+            car_left(left_speed, right_speed)
+            current_speed_left = -left_speed
+            current_speed_right = right_speed
+
+            # LED: Yellow (turning) - only if LED enabled
+            if USE_LED_EFFECTS and led_enabled:
+                bot.Ctrl_WQ2812_ALL(1, 3)
+            if DEBUG_MODE:
+                print(f"Turn LEFT - L:{left_speed}, R:{right_speed}")
+
+        elif direction == "RIGHT":
+            # Turn right
+            left_speed = motor_up_speed + 10
+            right_speed = motor_down_speed - 10
+            car_right(left_speed, right_speed)
+            current_speed_left = left_speed
+            current_speed_right = -right_speed
+
+            # LED: Yellow (turning) - only if LED enabled
+            if USE_LED_EFFECTS and led_enabled:
+                bot.Ctrl_WQ2812_ALL(1, 3)
+            if DEBUG_MODE:
+                print(f"Turn RIGHT - L:{left_speed}, R:{right_speed}")
+
+        elif direction == "RANDOM":
+            # Random direction
+            random_direction = random.choice(["LEFT", "RIGHT"])
+            if DEBUG_MODE:
+                print(f"Random direction: {random_direction}")
+
+            if random_direction == "LEFT":
+                left_speed = motor_down_speed - 10
+                right_speed = motor_up_speed + 10
+                car_left(left_speed, right_speed)
+                current_speed_left = -left_speed
+                current_speed_right = right_speed
+            else:
+                left_speed = motor_up_speed + 10
+                right_speed = motor_down_speed - 10
+                car_right(left_speed, right_speed)
+                current_speed_left = left_speed
+                current_speed_right = -right_speed
 
         # FPS 계산 (10프레임마다)
         if frame_count % 10 == 0:
             elapsed = time.time() - start_time
-            fps = 10 / elapsed
+            fps = 10 / elapsed if elapsed > 0 else 0.0
             if DEBUG_MODE:
                 print(f"📊 FPS: {fps:.1f}")
             start_time = time.time()
 
-        # 키 입력 처리
-        key = cv2.waitKey(30) & 0xFF
+        # 4_Processed Frame에 정보 표시
+        processed_with_info = draw_info_on_binary_frame(
+            processed_frame, current_direction, histogram
+        )
+        cv2.imshow("4_Processed Frame", processed_with_info)
+
+        # 키 입력 처리 (대기 시간 증가)
+        key = cv2.waitKey(1) & 0xFF
+
         if key == 27:  # ESC
             print("\n🛑 Stopping...")
             break
         elif key == 32:  # SPACE
             print("\n⏸️  Paused. Press any key to continue.")
             car_stop()
+            current_direction = "STOP"
+            current_speed_left = 0
+            current_speed_right = 0
             cv2.waitKey()
-        elif key == ord("l"):  # LED 토글
-            led_state = not led_state
-            if led_state:
-                bot.Ctrl_WQ2812_ALL(1, 2)  # 파란색
-                print("💡 LED ON")
+        elif key == ord("m") or key == ord("M"):  # Motor toggle
+            motor_enabled = not motor_enabled
+            if motor_enabled:
+                print("🚗 MOTOR ENABLED")
             else:
-                bot.Ctrl_WQ2812_ALL(0, 0)  # OFF
-                print("💡 LED OFF")
-        elif key == ord("b"):  # 부저 테스트
+                car_stop()
+                current_speed_left = 0
+                current_speed_right = 0
+                print("🛑 MOTOR DISABLED (stopped)")
+        elif key == ord("l") or key == ord("L"):  # LED Bar toggle
+            led_enabled = not led_enabled
+            if led_enabled:
+                print("💡 LED Bar ENABLED")
+            else:
+                bot.Ctrl_WQ2812_ALL(0, 0)  # Turn off LED
+                print("💡 LED Bar DISABLED")
+        elif key == ord("b") or key == ord("B"):  # Buzzer test
             print("🔊 Beep!")
             bot.Ctrl_BEEP_Switch(1)
             time.sleep(0.1)
             bot.Ctrl_BEEP_Switch(0)
-
-        time.sleep(0.05)
 
 except KeyboardInterrupt:
     print("\n⚠️  Interrupted by user")
@@ -876,10 +1240,9 @@ finally:
     car_stop()
     print("✅ Motors stopped")
 
-    # LED 끄기
-    if USE_LED_EFFECTS:
-        bot.Ctrl_WQ2812_ALL(0, 0)
-        print("✅ LEDs off")
+    # LED 끄기 (항상 끄기)
+    bot.Ctrl_WQ2812_ALL(0, 0)
+    print("✅ LEDs off")
 
     # 부저 끄기
     bot.Ctrl_BEEP_Switch(0)

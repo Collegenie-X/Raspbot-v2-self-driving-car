@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Raspbot v2 자율주행 테스트 코드 (전체 기능)
-서보 모터 포함 전체 기능을 사용한 라인 트레이싱 테스트
+Raspbot v2 자율주행 테스트 코드 (기본 기능)
+서보 모터 포함 기본 라인 트레이싱 테스트
 
 Copyright (C): 2015-2024, Shenzhen Yahboom Tech
-Modified: 2025-11-25
+Modified: 2025-11-30
 
 ═══════════════════════════════════════════════════════════
 주요 특징:
 ═══════════════════════════════════════════════════════════
 - 서보 모터 제어 포함 (카메라 각도 조절)
-- 라인 트레이싱 기본 기능
-- 막다른 길 감지 시 서보 회전으로 대체 경로 탐색
+- 라인 트레이싱 기본 기능 (빨간색/회색 도로선 감지)
+- 히스토그램 3등분 분석 기반 방향 결정
 - 단계별 주석으로 실행 흐름 명확화
+
+═══════════════════════════════════════════════════════════
+교육생 실습 과제:
+═══════════════════════════════════════════════════════════
+- 막다른 길 감지 알고리즘 구현
+- 서보 모터를 활용한 대체 경로 탐색 기능 추가
 
 ═══════════════════════════════════════════════════════════
 실행 단계:
@@ -626,79 +632,6 @@ def rotate_servo(servo_id, angle):
     bot.Ctrl_Servo(servo_id, angle)
 
 
-def rotate_servo_and_check_direction(detect_value, roi_top_y, roi_bottom_y):
-    """
-    서보 모터 회전으로 대체 경로 확인 (3등분 분석 - 도로선 감지)
-
-    처리 단계:
-    1. 서보 모터를 180도로 회전
-    2. 새 프레임 캡처
-    3. 프레임 처리 (도로선 감지)
-    4. 히스토그램 3등분 분석
-    5. 서보 모터 원위치
-    6. 최적 방향 반환
-
-    로직 (도로선 감지):
-    - 각 영역의 합을 비교
-    - 합이 작을수록 = 도로선 적음 = 검정 도로 많음 = 주행 가능
-    - 합이 클수록 = 도로선 많음 = 경계/막힘
-    - 가장 작은 합을 가진 방향으로 회전
-    """
-    global cap
-
-    if DEBUG_MODE:
-        print("\n=== Searching Alternative Path ===")
-
-    # 1. 서보 모터 회전 (뒤를 확인)
-    bot.Ctrl_Servo(1, 180)
-    bot.Ctrl_Servo(2, 100)
-    time.sleep(0.5)
-
-    # 2. 새 프레임 캡처
-    ret, frame = cap.read()
-    if not ret:
-        print("Cannot read frame from camera.")
-        return "STOP"
-
-    # 3. 프레임 처리
-    processed_frame = process_frame(frame, detect_value, roi_top_y, roi_bottom_y)
-    histogram_180 = np.sum(processed_frame, axis=0)
-
-    # 4. 히스토그램 3등분 분석
-    left_sum, center_sum, right_sum, left_ratio, center_ratio, right_ratio = (
-        analyze_histogram(histogram_180)
-    )
-
-    if DEBUG_MODE:
-        print(f"Alternative path analysis (3-way split):")
-        print(f"  LEFT:   {left_sum:7d} (ratio: {left_ratio:.3f})")
-        print(f"  CENTER: {center_sum:7d} (ratio: {center_ratio:.3f})")
-        print(f"  RIGHT:  {right_sum:7d} (ratio: {right_ratio:.3f})")
-
-    # 5. 서보 모터 원위치 (트랙바 값 사용)
-    servo_1_angle = cv2.getTrackbarPos("Servo_1_Angle", "Camera Settings")
-    servo_2_angle = cv2.getTrackbarPos("Servo_2_Angle", "Camera Settings")
-    bot.Ctrl_Servo(1, servo_1_angle)
-    bot.Ctrl_Servo(2, servo_2_angle)
-    time.sleep(0.3)
-
-    # 6. 최적 방향 반환 (합이 가장 작은 곳 = 도로선이 가장 적은 곳 = 주행 가능)
-    min_sum = min(left_sum, center_sum, right_sum)
-
-    if min_sum == left_sum:
-        if DEBUG_MODE:
-            print("Decision: Turn LEFT (left has fewer road lines = more drivable)")
-        return "LEFT"
-    elif min_sum == right_sum:
-        if DEBUG_MODE:
-            print("Decision: Turn RIGHT (right has fewer road lines = more drivable)")
-        return "RIGHT"
-    else:
-        if DEBUG_MODE:
-            print("Decision: Go straight (center has fewer road lines = more drivable)")
-        return "UP"
-
-
 print("Servo motor control functions defined successfully\n")
 
 # ============================
@@ -765,7 +698,7 @@ def decide_direction(
     1. 히스토그램 3등분 분석 (LEFT, CENTER, RIGHT)
     2. 좌우 영역 비교하여 도로 방향 판단
     3. 좌우 차이가 크면 해당 방향으로 회전
-    4. 중앙 영역에 도로선이 많으면 막다른 길로 판단
+    4. 막다른 길 감지 시 랜덤 방향 선택
     5. 그 외 직진
 
     로직 (도로선 감지 모드):
@@ -773,10 +706,12 @@ def decide_direction(
     - 합이 큼 = 도로선 많음 = 경계/막힘 (빨간색/회색선)
     - left_sum < right_sum → 왼쪽에 도로선 적음 → LEFT 회전 가능
     - right_sum < left_sum → 오른쪽에 도로선 적음 → RIGHT 회전 가능
-    - center_ratio > 0.7 → 중앙에 도로선 많음 → 막다른 길
+    - center_ratio > 0.7 → 중앙에 도로선 많음 → 막다른 길 → 랜덤 선택
 
     Returns:
         tuple: (direction, left_sum, center_sum, right_sum) - 방향과 히스토그램 분석값
+    
+    NOTE: 서보 모터를 활용한 대체 경로 탐색 기능은 교육생들이 직접 구현해야 합니다.
     """
     # 1. 히스토그램 3등분 분석
     left_sum, center_sum, right_sum, left_ratio, center_ratio, right_ratio = (
@@ -817,17 +752,33 @@ def decide_direction(
             bot.Ctrl_BEEP_Switch(0)
         return direction, left_sum, center_sum, right_sum
 
-    # 3. 중앙 막힘 감지 (center_ratio가 높으면 중앙에 도로선이 많음 = 막힘)
+    # 3. 막다른 길 감지 (center_ratio가 높으면 중앙에 도로선이 많음 = 막힘)
     if center_ratio > 0.7:  # 70% 이상이 도로선이면 막다른 길
         if DEBUG_MODE:
             print("Dead end detected! Center has too many road lines.")
-            print("Searching alternative path...")
+            print("Choosing random direction (LEFT or RIGHT)...")
+        
+        # 차량 잠시 정지
         car_stop()
         time.sleep(0.3)
-        alt_direction = rotate_servo_and_check_direction(
-            detect_value, roi_top_y, roi_bottom_y
-        )
-        return alt_direction, left_sum, center_sum, right_sum
+        
+        # 랜덤으로 LEFT 또는 RIGHT 선택
+        random_direction = random.choice(["LEFT", "RIGHT"])
+        
+        if DEBUG_MODE:
+            print(f"Random direction selected: {random_direction}")
+        
+        # 부저로 막다른 길 알림
+        if USE_BEEP:
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(0)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(0)
+        
+        return random_direction, left_sum, center_sum, right_sum
 
     # 4. 직진 (중앙에 검정 도로가 있음)
     if DEBUG_MODE:

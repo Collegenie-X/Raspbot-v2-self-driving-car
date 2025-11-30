@@ -44,7 +44,6 @@ Raspberry Pi 기반의 자율주행 로봇 카 프로젝트입니다. OpenCV를 
 ### 🌐 네트워크 기능
 - **웹 서버**: 실시간 카메라 스트리밍
 - **UDP 디스커버리**: 네트워크에서 자동 검색
-- **와이파이 설정**: AP 모드 및 클라이언트 모드 전환 지원
 
 ---
 
@@ -100,9 +99,7 @@ Raspbot-v2-self-driving-car/
 └── 📁 docs/                         # ⭐ 프로젝트 문서
     ├── QUICK_START.md              # 빠른 시작 가이드
     ├── SOURCE_CODE_GUIDE.md        # 소스 코드 상세 가이드
-    ├── AUTOSTART_GUIDE.md          # 자동 실행 설정 가이드
-    ├── WIFI_SETUP_GUIDE.md         # 와이파이 설정 가이드
-    └── TUNING_GUIDE.md             # 자율주행 튜닝 가이드
+    └── AUTOSTART_GUIDE.md          # 자동 실행 설정 가이드
 ```
 
 ---
@@ -116,8 +113,6 @@ Raspbot-v2-self-driving-car/
 | 문서 | 설명 | 대상 |
 |------|------|------|
 | **[QUICK_START.md](./docs/QUICK_START.md)** | 5분 안에 시작하기, 빠른 수정 예제 | 초보자 |
-| **[WIFI_SETUP_GUIDE.md](./docs/WIFI_SETUP_GUIDE.md)** | 와이파이 설정 (AP 모드 해제, 외부망 연결) | 초기 설정자 |
-| **[TUNING_GUIDE.md](./docs/TUNING_GUIDE.md)** | 자율주행 성능 최적화 및 파라미터 튜닝 | 개발자 |
 | **[SOURCE_CODE_GUIDE.md](./docs/SOURCE_CODE_GUIDE.md)** | 전체 코드 구조, 상세 수정 가이드 | 개발자 |
 | **[CAMERA_SETUP.md](./docs/CAMERA_SETUP.md)** | Pi Camera & USB 카메라 설정 및 문제 해결 | 모든 사용자 |
 | **[MIGRATION_GUIDE.md](./docs/MIGRATION_GUIDE.md)** | YB_Pcb_Car → Raspbot_Lib 전환 가이드 | 기존 사용자 |
@@ -300,10 +295,6 @@ light.execute_effect('river', 10, 0.1)  # 10초간 흐르는 효과
 
 ## 🐛 문제 해결
 
-### 와이파이 연결 문제 (외부망 연결)
-라즈베리 파이가 외부 공유기를 찾지 못하는 경우, AP 모드가 켜져 있을 수 있습니다.
-- **해결 방법**: [docs/WIFI_SETUP_GUIDE.md](./docs/WIFI_SETUP_GUIDE.md)를 참고하여 AP 모드를 끄고 외부 공유기에 연결하세요.
-
 ### 카메라가 작동하지 않음
 
 ```bash
@@ -375,10 +366,10 @@ sudo usermod -aG i2c pi
 - ✅ 표지판 인식
 - ✅ 웹 스트리밍
 - ✅ 자동 실행 설정
-- ✅ 와이파이 설정 가이드
 - 🔄 머신러닝 통합 (진행 중)
 - 🔄 완전 자율주행 (진행 중)
 
 ---
 
 **Happy Coding! 🚗💨**
+

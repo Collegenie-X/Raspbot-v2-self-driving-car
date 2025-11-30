@@ -1,0 +1,367 @@
+1
+00:00:00,750 --> 00:00:02,370
+Hello and welcome.
+
+2
+00:00:02,370 --> 00:00:07,280
+So from our previous videos we have done all the basic image processing.
+
+3
+00:00:07,320 --> 00:00:15,570
+Now in this video I will try to find the exact lead positions so far on my program.
+
+4
+00:00:15,570 --> 00:00:17,270
+These are my lead lines.
+
+5
+00:00:17,310 --> 00:00:23,910
+And in this video I will try to find the exact position of these lines with respect to the left side
+
+6
+00:00:23,910 --> 00:00:25,830
+of this frame.
+
+7
+00:00:25,920 --> 00:00:27,480
+So let's close this.
+
+8
+00:00:29,280 --> 00:00:41,850
+Now let us suppose this is over a frame and in this frame we have to lay lines let's say these are our
+
+9
+00:00:41,850 --> 00:00:50,070
+lean lines.
+
+10
+00:00:50,420 --> 00:00:54,220
+Now we have a frames and we have two lean lines.
+
+11
+00:00:54,410 --> 00:01:00,190
+Next I have to find a position off over a first line with respect to the left side of your frame.
+
+12
+00:01:00,190 --> 00:01:03,390
+Let's say that this distance will be a.
+
+13
+00:01:03,980 --> 00:01:08,990
+And we also have to find the position of this line with respect to the left side of your frame.
+
+14
+00:01:09,890 --> 00:01:16,040
+So let's say this distance will be be in our image processing.
+
+15
+00:01:16,040 --> 00:01:23,020
+We have to find the value of A and B at this time we also know our framework is fought under.
+
+16
+00:01:23,210 --> 00:01:25,200
+We updated a little framework.
+
+17
+00:01:25,280 --> 00:01:28,820
+And our frame height is 240.
+
+18
+00:01:28,850 --> 00:01:32,370
+Now the next question is how we can find these distances.
+
+19
+00:01:32,450 --> 00:01:35,150
+How we can find the value of A and B.
+
+20
+00:01:35,300 --> 00:01:41,380
+So to find the value of A and B I will again create a reason of interest.
+
+21
+00:01:42,090 --> 00:01:47,620
+So I will create a reason often best at the bottom and the size of this reason.
+
+22
+00:01:47,620 --> 00:01:50,370
+Interest really depends upon your choice.
+
+23
+00:01:50,390 --> 00:01:58,160
+So I have tried many reason of interest in this project but I find the best possible size is this.
+
+24
+00:01:58,430 --> 00:02:02,530
+So I will create a reason of interest of this size.
+
+25
+00:02:02,570 --> 00:02:05,140
+So let's say the word.
+
+26
+00:02:05,150 --> 00:02:13,340
+We know the words of although reason enough interest will be 400 and this hired will be a hundred and
+
+27
+00:02:13,340 --> 00:02:17,040
+the next question is how we can implement this reason of interest.
+
+28
+00:02:17,060 --> 00:02:23,480
+In other C++ language so we can implement this reason of interest by a rectangular command.
+
+29
+00:02:23,840 --> 00:02:27,560
+So for of rectangular more we need two points.
+
+30
+00:02:27,560 --> 00:02:30,620
+So our first plant will be this one.
+
+31
+00:02:30,980 --> 00:02:33,730
+And our second point will be this one.
+
+32
+00:02:33,740 --> 00:02:40,430
+So basically these are two gardeners and with these two gardeners we can draw a rectangle in our open
+
+33
+00:02:40,430 --> 00:02:41,590
+TV.
+
+34
+00:02:41,630 --> 00:02:47,900
+So let's say the coordinate of our first plant will be 0 0 mile 1 40
+
+35
+00:02:51,850 --> 00:02:57,870
+because of our frame height is 240 and a word of this reason often plus is hundred.
+
+36
+00:02:57,910 --> 00:03:07,030
+So the cardinal of this plant will be 0 or more 140 and Cardinals for this plant will be 400 which is
+
+37
+00:03:07,120 --> 00:03:13,630
+our frame word and frame height is our 240 here.
+
+38
+00:03:13,690 --> 00:03:18,000
+So the cardinals will be 400 comma 240 here.
+
+39
+00:03:18,130 --> 00:03:25,150
+Now I will use a rectangular command to read this of is enough interest in open TV so the syntax is
+
+40
+00:03:25,150 --> 00:03:28,150
+this rectangular.
+
+41
+00:03:28,150 --> 00:03:32,350
+Now for this event Look Ma we have four different parameters.
+
+42
+00:03:32,350 --> 00:03:33,800
+First is x.
+
+43
+00:03:34,120 --> 00:03:44,020
+Second is y told will be X plus a and fourth will be white plus B.
+
+44
+00:03:44,050 --> 00:03:46,250
+Now let's fill these values.
+
+45
+00:03:46,450 --> 00:03:50,080
+So rectangular.
+
+46
+00:03:50,080 --> 00:03:52,360
+Now what X and Y.
+
+47
+00:03:52,360 --> 00:03:55,850
+So the X and Y will be our first point.
+
+48
+00:03:55,930 --> 00:03:57,890
+So the first point is zero.
+
+49
+00:03:57,980 --> 00:04:01,800
+Come 140.
+
+50
+00:04:02,320 --> 00:04:05,710
+Now let us discuss both what are a and b.
+
+51
+00:04:05,800 --> 00:04:06,880
+So Ian B.
+
+52
+00:04:06,910 --> 00:04:07,330
+Nada.
+
+53
+00:04:07,340 --> 00:04:14,800
+These values of A will be the worth of this reason often trust and b will be the height of this reason
+
+54
+00:04:14,800 --> 00:04:16,240
+often trust.
+
+55
+00:04:16,270 --> 00:04:23,260
+So worth of reason often trust is 400 so 400 plus 0 will be 400
+
+56
+00:04:25,660 --> 00:04:26,520
+next why.
+
+57
+00:04:26,530 --> 00:04:35,200
+We know why is 140 and B is this hundred so we can see this value will be 240.
+
+58
+00:04:35,260 --> 00:04:43,030
+Now if I execute this command in our open TV then I will get this rectangle.
+
+59
+00:04:43,030 --> 00:04:49,690
+Now in the next half we have to process this rectangle in order to find the exact position of these
+
+60
+00:04:49,690 --> 00:04:51,430
+lead lines.
+
+61
+00:04:51,430 --> 00:04:56,490
+Now in open TV we cannot process this whole reason of interest at once.
+
+62
+00:04:56,620 --> 00:05:01,050
+So we have to divide this reason of interest into different strips.
+
+63
+00:05:01,180 --> 00:05:05,170
+So let's say I will divide this reason of interest into different strips
+
+64
+00:05:11,630 --> 00:05:18,170
+already so I divided my whole reason of interest into different strips and the worth of these tips will
+
+65
+00:05:18,170 --> 00:05:27,350
+be one pixel so same for all the shapes the worth of all the strips will be one pixel and height be
+
+66
+00:05:27,350 --> 00:05:34,190
+no height we have hundred pixels so the height is hundred pixels at this one if we get weird how many
+
+67
+00:05:34,190 --> 00:05:35,550
+pixels are in months.
+
+68
+00:05:35,570 --> 00:05:39,210
+So we can easily calculated so this will be hundred into one.
+
+69
+00:05:39,260 --> 00:05:47,270
+So in one step there will be total one hundred pixels and each pixels has an intensity of zero because
+
+70
+00:05:47,300 --> 00:05:55,100
+each pixel is dark so we can multiply with the needle and we will get the resultant intensity of the
+
+71
+00:05:55,160 --> 00:06:01,000
+zero and we will store this intensity in dynamic edit here.
+
+72
+00:06:01,010 --> 00:06:07,390
+So let's say our first element is zero because the intensity of one of our first trip is zero.
+
+73
+00:06:07,400 --> 00:06:11,690
+In the next step I will try to calculate the intensity for our next trip.
+
+74
+00:06:11,780 --> 00:06:17,960
+So next trip we have hundred pixel and each pixels have intensity zeros or hundred multiplied by zero
+
+75
+00:06:17,960 --> 00:06:19,750
+will be zero.
+
+76
+00:06:19,760 --> 00:06:21,980
+Same for our third strip.
+
+77
+00:06:22,160 --> 00:06:25,950
+Same for our fourth strip.
+
+78
+00:06:26,180 --> 00:06:33,050
+Now if I will get rid of the intensity for my fifth this trip then begin see we have total one hundred
+
+79
+00:06:33,050 --> 00:06:40,980
+pixels and each pixels had the intensity of 255 because each pixels are in white color.
+
+80
+00:06:41,210 --> 00:06:46,330
+We can multiply one hundred with their 255 and we will get some values.
+
+81
+00:06:46,330 --> 00:06:55,590
+So let's say this value is X and we will fill this value in this edit here X again.
+
+82
+00:06:55,760 --> 00:07:03,630
+If we try to process our next move so we will get zero again zero zero.
+
+83
+00:07:03,890 --> 00:07:13,130
+Then we will try to process this it will again get the value let's say x and gain for next trip X and
+
+84
+00:07:13,130 --> 00:07:20,810
+for all of the steps the value will be zero.
+
+85
+00:07:21,260 --> 00:07:25,310
+I also mentioned earlier the worth of each strip is one pixel.
+
+86
+00:07:25,460 --> 00:07:31,760
+So we need total 400 pixels in order to process our whole reason of interest.
+
+87
+00:07:31,760 --> 00:07:39,710
+So this will be over Eddie and in this added there will be total 400 elements and all these elements
+
+88
+00:07:39,710 --> 00:07:45,770
+will correspond to the intensity of each step for a reason of interest.
+
+89
+00:07:45,770 --> 00:07:52,610
+So this is the basic strategy that I will use to calculate the position of these chips.
+
+90
+00:07:52,670 --> 00:07:59,300
+Now this whole process is somehow related to the histogram process so we can also say we are calculating
+
+91
+00:07:59,300 --> 00:08:05,370
+it has to go for this image to calculate the position of these two lines.
+
+92
+00:08:05,370 --> 00:08:11,480
+Now let us implement the same thing in our C++ so let's go back to our project.

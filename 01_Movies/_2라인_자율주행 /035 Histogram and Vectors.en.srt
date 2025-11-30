@@ -1,0 +1,436 @@
+1
+00:00:00,240 --> 00:00:02,010
+So let's go back to our project
+그럼 우리의 프로젝트로 돌아가자
+
+2
+00:00:05,640 --> 00:00:06,680
+are this task.
+
+3
+00:00:06,690 --> 00:00:09,600
+I will create a new function.
+새로운 기능을 만들겠습니다.
+
+4
+00:00:10,140 --> 00:00:13,530
+I will create a function by the name of histogram
+히스토그램이라는 이름으로 함수를 생성하겠습니다.
+
+5
+00:00:20,780 --> 00:00:26,340
+so first of all I have to create a dynamic editor to store all the intensity values.
+그래서 우선 모든 강도 값을 저장할 동적 편집기를 만들어야 합니다.
+
+6
+00:00:26,540 --> 00:00:31,730
+So I will create a dynamic at a here we know dynamic areas known as vector.
+그래서 저는 여기에서 벡터로 알려진 동적 영역을 생성할 것입니다.
+
+7
+00:00:31,820 --> 00:00:34,570
+So I will create a vector.
+그래서 벡터를 생성하겠습니다.
+
+8
+00:00:34,940 --> 00:00:39,740
+Next all the values in our vector will be integers so I will define the end.
+다음으로 벡터의 모든 값은 정수가 되므로 끝을 정의하겠습니다.
+
+9
+00:00:39,740 --> 00:00:47,200
+Next I will type the name of the vectors on there see the name of the vector will be his to ground floor
+다음으로 나는 거기에 벡터의 이름을 입력할 것이고 벡터의 이름은 1층에 그의 이름이 될 것입니다.
+
+10
+00:00:47,250 --> 00:00:51,020
+of a plain histogram Lane.
+일반 히스토그램 레인의
+
+11
+00:00:51,020 --> 00:00:53,630
+So I will type the name as histogram Lane.
+그래서 이름을 히스토그램 Lane으로 입력하겠습니다.
+
+12
+00:00:53,660 --> 00:00:56,150
+Next go to your function.
+다음으로 기능으로 이동하십시오.
+
+13
+00:00:56,390 --> 00:00:59,450
+We have defined our vector now in the first step.
+이제 첫 번째 단계에서 벡터를 정의했습니다.
+
+14
+00:00:59,480 --> 00:01:06,380
+We have to adjust the size of our dynamic every means vector so just the name of the vector.
+우리는 동적 벡터의 크기를 조정하여 벡터의 이름만 조정해야 합니다.
+
+15
+00:01:06,410 --> 00:01:09,860
+So this will be histogram lean.
+그래서 이것은 히스토그램 린이 될 것입니다.
+
+16
+00:01:09,860 --> 00:01:12,050
+Now I will g in this size to 400.
+이제 이 크기를 400으로 지정하겠습니다.
+
+17
+00:01:12,050 --> 00:01:22,340
+There will be over width of over frame so we can use histogram Lane dart resize function re size or
+히스토그램 레인 다트 크기 조정 기능을 사용할 수 있도록 오버 프레임의 너비가 초과되거나 크기가 조정됩니다.
+
+18
+00:01:22,340 --> 00:01:30,440
+the width although the frame is 400 in the next time I will it all the values in my histogram so as
+다음 번에 프레임이 400이지만 너비는 내 히스토그램의 모든 값을 다음과 같이
+
+19
+00:01:30,450 --> 00:01:35,120
+to lean forward this I can use a clear cone
+이것을 앞으로 기울이기 위해 나는 깨끗한 원뿔을 사용할 수 있습니다
+
+20
+00:01:37,840 --> 00:01:38,760
+at this point.
+
+21
+00:01:38,770 --> 00:01:45,430
+If you know the vectors and your basic operations then you can clearly understand what's going on here.
+벡터와 기본 작업을 알고 있다면 여기서 무슨 일이 일어나고 있는지 명확하게 이해할 수 있습니다.
+
+22
+00:01:45,490 --> 00:01:53,100
+But if you do not know about the vectors then you can learn basic vector operations from this website.
+그러나 벡터에 대해 모른다면 이 웹사이트에서 기본적인 벡터 연산을 배울 수 있습니다.
+
+23
+00:01:53,200 --> 00:01:58,250
+I will link this webpage in the resources section so that you can easily learn about the vectors and
+이 웹페이지를 리소스 섹션에 연결하여 벡터 및
+
+24
+00:01:58,250 --> 00:02:04,030
+their basic operations so all the basic vector operation that I will use in my project.
+기본 작업이므로 내 프로젝트에서 사용할 모든 기본 벡터 작업입니다.
+
+25
+00:02:04,030 --> 00:02:10,010
+You can learn from here and most importantly one example also.
+여기에서 가장 중요한 한 가지 예도 배울 수 있습니다.
+
+26
+00:02:10,010 --> 00:02:14,320
+Now let's go back to our project in the next step.
+
+27
+00:02:14,320 --> 00:02:19,480
+I will create a for loop to process a word strips in our reason of interest.
+이제 다음 단계의 프로젝트로 돌아가 보겠습니다.
+
+28
+00:02:19,480 --> 00:02:21,610
+So for this I will create a for loop
+그래서 이것을 위해 for 루프를 만들 것입니다
+
+29
+00:02:25,280 --> 00:02:33,980
+so in the next step we have to define the word of a frame so a word of over theme is 400 and the next
+그래서 다음 단계에서 우리는 프레임의 단어를 정의해야 합니다. 그래서 over theme의 단어는 400이고 다음은
+
+30
+00:02:33,980 --> 00:02:36,770
+step I will increment this.
+단계 나는 이것을 증가시킬 것입니다.
+
+31
+00:02:37,110 --> 00:02:43,190
+Now anytime if you change the framework in the future then you have to change the value from here also.
+이제 미래에 프레임워크를 변경하면 언제든지 여기에서 값을 변경해야 합니다.
+
+32
+00:02:43,370 --> 00:02:47,990
+But you can avoid this situation by using the frame size signals or type here.
+그러나 프레임 크기 신호를 사용하거나 여기에 입력하면 이러한 상황을 피할 수 있습니다.
+
+33
+00:02:47,990 --> 00:02:58,340
+As frame dart size now this whole command will return the size of the frame so the size of the frame
+이제 프레임 다트 크기로 이 전체 명령은 프레임 크기를 반환하므로 프레임 크기가
+
+34
+00:02:58,340 --> 00:03:00,910
+is 400 multiplied by 250.
+400 곱하기 250입니다.
+
+35
+00:03:01,070 --> 00:03:07,780
+But we only need a word for one frame so we can type a gifted dart width.
+그러나 우리는 재능 있는 다트 너비를 입력할 수 있도록 한 프레임에 대한 단어만 필요합니다.
+
+36
+00:03:07,810 --> 00:03:11,600
+Now this whole condition will return the value of 400.
+이제 이 전체 조건은 400 값을 반환합니다.
+
+37
+00:03:11,600 --> 00:03:18,260
+That is your frame word but for my project I'm not going to change my frameworks so I can simply use
+그것은 당신의 프레임 단어이지만 내 프로젝트의 경우 단순히 사용할 수 있도록 프레임 워크를 변경하지 않을 것입니다.
+
+38
+00:03:18,260 --> 00:03:19,310
+a 400 here
+여기 400
+
+39
+00:03:24,440 --> 00:03:25,580
+for more information.
+자세한 내용은.
+
+40
+00:03:25,580 --> 00:03:33,710
+I can also add a comment his or frame dart size.
+나는 또한 주석을 추가하거나 프레임 다트 크기를 추가할 수 있습니다.
+
+41
+00:03:34,400 --> 00:03:43,220
+This will give us size as 400 by 240 but if you want only what you can type Dart with here now the value
+이렇게 하면 크기가 400 x 240으로 표시되지만 여기에서 Dart를 입력할 수 있는 항목만 원하면 이제 값을 입력합니다.
+
+42
+00:03:43,220 --> 00:03:45,410
+of this will be 400
+이것의 400이 될 것입니다
+
+43
+00:03:50,430 --> 00:03:55,110
+so in the next half I needed a reason of interest in which I would create strips.
+그래서 다음 절반에는 스트립을 만들 관심의 이유가 필요했습니다.
+
+44
+00:03:55,170 --> 00:04:03,540
+So let us define a new variables so this will be reason of interest for our lean.
+따라서 이것이 우리의 린(lean)에 대한 관심의 이유가 될 수 있도록 새 변수를 정의하겠습니다.
+
+45
+00:04:03,570 --> 00:04:08,230
+This is a new Mac variable so we have to define this married variable here.
+이것은 새로운 Mac 변수이므로 여기에서 이 결합된 변수를 정의해야 합니다.
+
+46
+00:04:10,170 --> 00:04:16,010
+Let's say I will start with a new line Maggie.
+새 라인 Maggie로 시작한다고 가정해 보겠습니다.
+
+47
+00:04:16,160 --> 00:04:18,230
+This will be our way lane
+이것은 우리의 차선이 될 것입니다
+
+48
+00:04:22,100 --> 00:04:22,510
+now.
+
+49
+00:04:22,540 --> 00:04:26,940
+The next step is for which frame I will create a reason often trust.
+다음 단계는 내가 자주 신뢰하는 이유를 만들 프레임입니다.
+
+50
+00:04:26,980 --> 00:04:34,390
+So if I run this program I just want everyday reason of interest for this frame so this image is our
+따라서 이 프로그램을 실행하면 이 프레임에 대한 관심의 일상적인 이유가 필요하므로 이 이미지는
+
+51
+00:04:34,390 --> 00:04:41,370
+final image and the name for our final image is free and painless so I will use it frame final here
+최종 이미지와 최종 이미지의 이름은 무료이며 고통이 없으므로 여기에서 최종 이미지 프레임을 사용하겠습니다.
+
+52
+00:04:42,340 --> 00:04:43,120
+frame.
+
+53
+00:04:43,290 --> 00:04:54,400
+Final next I will pass a rectangular argument to create a reason of interest.
+마지막으로 관심의 이유를 만들기 위해 직사각형 인수를 전달합니다.
+
+54
+00:04:54,740 --> 00:04:58,490
+Now this parameter is a explained here.
+이제 이 매개변수에 대해 설명합니다.
+
+55
+00:04:58,700 --> 00:05:03,610
+You can see from here of a rectangular function.
+여기에서 직사각형 함수를 볼 수 있습니다.
+
+56
+00:05:04,010 --> 00:05:10,430
+Now the next question is how we can create a script from this rectangular function so I can simply change
+이제 다음 질문은 이 직사각형 함수에서 스크립트를 생성하여 간단히 변경할 수 있는 방법입니다.
+
+57
+00:05:10,460 --> 00:05:15,110
+the word of each trip to 1 instead of 400.
+각 여행의 단어는 400 대신 1입니다.
+
+58
+00:05:15,110 --> 00:05:21,300
+Now this whole command will create a single sip with the words of one but we have to move all these
+이제 이 전체 명령은 하나의 단어로 한 모금을 만들지만 이 모든 것을 움직여야 합니다.
+
+59
+00:05:21,300 --> 00:05:26,730
+steps with the for loop so I can simply pass the integer here.
+for 루프로 단계를 수행하여 여기에 정수를 전달할 수 있습니다.
+
+60
+00:05:27,020 --> 00:05:34,670
+Now in this way we can process our whole reason of interest but in 400 different scripts in the next
+이제 이러한 방식으로 관심 이유를 모두 처리할 수 있지만 다음 단계에서는 400개의 다른 스크립트에서
+
+61
+00:05:34,670 --> 00:05:34,910
+step.
+단계
+
+62
+00:05:34,910 --> 00:05:41,780
+I will try to normalize our pixels so I will divide the maximum possible intensity value to each and
+픽셀을 정규화하여 가능한 최대 강도 값을 각각에 나누고
+
+63
+00:05:41,780 --> 00:05:42,610
+every pixel.
+모든 픽셀.
+
+64
+00:05:42,980 --> 00:05:48,460
+So I will use their divide functions or divide.
+그래서 나는 그들의 나누기 기능을 사용하거나 나눌 것입니다.
+
+65
+00:05:48,650 --> 00:05:53,780
+I just wanted to word with the maximum possible in density so the maximum possible intensity for each
+나는 밀도에서 가능한 최대로 표현하고 싶었습니다. 그래서 각각에 대해 가능한 최대 강도
+
+66
+00:05:53,780 --> 00:05:57,050
+and every pixel will be fifty five.
+모든 픽셀은 55가 될 것입니다.
+
+67
+00:05:57,050 --> 00:05:59,870
+This is the maximum possible intensity.
+이것은 가능한 최대 강도입니다.
+
+68
+00:06:00,380 --> 00:06:05,060
+Next I have to specify the input image so input image is our reason of interest
+다음으로 입력 이미지가 관심의 이유가 되도록 입력 이미지를 지정해야 합니다.
+
+69
+00:06:07,710 --> 00:06:08,450
+next.
+
+70
+00:06:08,560 --> 00:06:11,900
+I will override this reason of interest with the new image.
+이 관심 이유를 새 이미지로 무시하겠습니다.
+
+71
+00:06:11,900 --> 00:06:18,800
+So our team are way lean in the next step.
+그래서 우리 팀은 다음 단계에서 훨씬 느슨합니다.
+
+72
+00:06:18,800 --> 00:06:24,980
+I will push all the intensity values in our dynamic areas so I created a dynamic area by the name of
+동적 영역의 모든 강도 값을 푸시하여 동적 영역을 이라는 이름으로 만들었습니다.
+
+73
+00:06:24,980 --> 00:06:26,380
+histogram lean.
+히스토그램 린.
+
+74
+00:06:26,390 --> 00:06:28,370
+We can see the situation from here.
+우리는 여기에서 상황을 볼 수 있습니다.
+
+75
+00:06:28,370 --> 00:06:30,040
+I will use this.
+
+76
+00:06:30,200 --> 00:06:32,530
+Now how you can feel the values in the vector.
+이제 벡터의 값을 어떻게 느낄 수 있습니까?
+
+77
+00:06:32,540 --> 00:06:35,280
+We usually fill the values in the vector from the backside.
+우리는 일반적으로 뒷면에서 벡터의 값을 채웁니다.
+
+78
+00:06:35,300 --> 00:06:39,020
+So I will use the DART push on the school back.
+그래서 나는 학교 뒤쪽에 DART 푸시를 사용할 것입니다.
+
+79
+00:06:41,270 --> 00:06:46,100
+Next I have to specify the data type so all the values are in integer.
+다음으로 모든 값이 정수가 되도록 데이터 유형을 지정해야 합니다.
+
+80
+00:06:46,100 --> 00:06:49,640
+Next I will add all the pixel intensities in a single strip.
+다음으로 단일 스트립에 모든 픽셀 강도를 추가합니다.
+
+81
+00:06:49,640 --> 00:06:59,020
+So I believe the sum and our frame is are lean.
+그래서 나는 합계와 우리의 프레임이 희박하다고 생각합니다.
+
+82
+00:06:59,150 --> 00:07:01,360
+Next step we have to define the color.
+다음 단계에서는 색상을 정의해야 합니다.
+
+83
+00:07:01,370 --> 00:07:08,870
+So we have only one color gender because this is a Gr. Gilliam is so I can define 0 here and last we
+이것이 Gr이기 때문에 우리는 단 하나의 색 성별만 가지고 있습니다. Gilliam은 여기에서 0을 정의할 수 있습니다.
+
+84
+00:07:08,870 --> 00:07:11,240
+will close all the round records.
+모든 라운드 기록을 닫습니다.
+
+85
+00:07:11,240 --> 00:07:15,900
+Next is semicolons so we are done with other steps.
+다음은 세미콜론이므로 다른 단계를 완료합니다.
+
+86
+00:07:15,920 --> 00:07:21,120
+I know this part may be complicated for some of you guys but if you still have any questions related
+이 부분이 여러분 중 일부에게는 복잡할 수 있다는 것을 알고 있지만 여전히 관련 질문이 있는 경우
+
+87
+00:07:21,120 --> 00:07:24,450
+to this histogram function then feel free to ask me.
+이 히스토그램 기능을 사용하려면 언제든지 저에게 물어보십시오.
+
+88
+00:07:24,470 --> 00:07:29,540
+So in the next hour we will find the actual position off of billions from this dynamic.
+따라서 다음 시간에 우리는 이 역학에서 수십억의 실제 위치를 찾을 것입니다.
+
+89
+00:07:29,540 --> 00:07:29,900
+Eddie.

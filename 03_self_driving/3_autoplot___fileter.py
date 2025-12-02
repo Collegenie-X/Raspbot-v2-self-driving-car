@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Raspbot v2 자율주행 코드 (개선 버전 v2.1)
+Raspbot v2 자율주행 코드 (RGB 필터링 버전 v2.2)
 라인 트레이싱 기반 자율주행 시스템
 
 Copyright (C): 2015-2024, Shenzhen Yahboom Tech
-Modified: 2025-11-25
+Modified: 2025-12-02
 
 ═══════════════════════════════════════════════════════════
 주요 기능:
 ═══════════════════════════════════════════════════════════
 1. 실시간 비전 처리 (OpenCV 기반)
    - 원근 변환 (Perspective Transform)
-   - 가중 그레이스케일 변환
+   - RGB 가중치 기반 그레이스케일 변환 (빛 반사 필터링)
    - 이진화 및 노이즈 제거
 
-2. 히스토그램 기반 방향 결정
-   - 6구역 분할 분석
-   - 좌우 회전 판단
-   - 막다른 길 감지 및 대체 경로 탐색
+2. 개선된 히스토그램 기반 방향 결정
+   - 3등분 분석 (LEFT/CENTER/RIGHT)
+   - 우선순위 기반 판단:
+     1) 좌우 차이 체크 (최우선)
+     2) 중앙 뚫림 체크
+     3) 막다른 길 감지 및 랜덤 선택
+   - 도로선 감지 모드 (낮을수록 주행 가능)
 
 3. 차량 제어
    - 직진, 좌회전, 우회전 (제자리 회전)
@@ -27,26 +30,28 @@ Modified: 2025-11-25
 
 4. 실시간 파라미터 조정
    - OpenCV 트랙바를 통한 실시간 튜닝
-   - 서보 각도, 속도, 검출 임계값 등
+   - 서보 각도, 속도, 검출 임계값, RGB 가중치 등
 
 ═══════════════════════════════════════════════════════════
-주요 변경사항 (v2.1):
+주요 변경사항 (v2.2):
 ═══════════════════════════════════════════════════════════
-1. 실제 카메라 해상도 자동 감지 및 적용
-2. 원근 변환 영역 동적 계산 (상단 영역 포함)
-3. Y Value 트랙바 범위 확장 (0~200)
-4. 한글 주석 및 상세 설명 추가
-5. 에러 처리 강화
+1. 0_autoplot___test.py의 개선된 방향 결정 알고리즘 적용
+2. SPACE 키: 모터만 정지, 카메라/디스플레이는 계속 동작
+3. RGB 가중치 기반 필터링으로 빛 반사 대응
+4. 중앙 뚫림 체크 추가 (CENTER_CLEAR_THRESHOLD)
+5. 막다른 길 감지 시 랜덤 방향 선택 (서보 모터 탐색 제거)
+6. 한글 주석 및 상세 설명 강화
 
 ═══════════════════════════════════════════════════════════
 동작 흐름:
 ═══════════════════════════════════════════════════════════
 1. 카메라 프레임 캡처
 2. 원근 변환 (ROI 영역 → 정면 뷰)
-3. 그레이스케일 변환 (RGB 가중치 적용)
+3. RGB 가중치 기반 그레이스케일 변환 (빛 반사 필터링)
 4. 이진화 (흰색 라인 검출)
-5. 히스토그램 분석 (좌우 영역 비교)
-6. 방향 결정 (직진/좌회전/우회전)
+5. 히스토그램 3등분 분석
+6. 우선순위 기반 방향 결정:
+   - 좌우 차이 > 중앙 뚫림 > 막다른 길 > 직진
 7. 모터 제어 실행
 8. 1번으로 반복
 
@@ -54,17 +59,18 @@ Modified: 2025-11-25
 사용 방법:
 ═══════════════════════════════════════════════════════════
 1. 트랙바 조정:
-   - Y Value: ROI 영역의 세로 위치 (높을수록 상단)
+   - ROI Top/Bottom Y: ROI 영역의 상단/하단 위치
    - Detect Value: 이진화 임계값 (환경에 따라 조정)
    - Motor Speed: 속도 조절
-   - R/G/B Weight: 색상 가중치 (라인 색상에 맞게)
+   - R/G/B Weight: RGB 가중치 (빛 반사 필터링에 중요)
+   - Direction Threshold: 좌우 차이 임계값
+   - Up Threshold: 막다른 길 감지 임계값
 
-2. Keyboard shortcuts:
-   - ESC: Exit
-   - SPACE: Pause
-   - 'm': Motor toggle (ON/OFF)
-   - 'l': LED toggle
-   - 'b': Buzzer test
+2. 키보드 단축키:
+   - ESC: 종료
+   - SPACE: 모터 토글 (ON/OFF) - 카메라는 계속 동작
+   - 'l': LED 토글
+   - 'b': 부저 테스트
 """
 
 import sys
@@ -101,6 +107,9 @@ DEFAULT_B_WEIGHT = 60  # 기본값: 60 (파랑 가중치 높임)
 # 방향 판단 임계값
 DEFAULT_DIRECTION_THRESHOLD = 35000  # 기본값: 35000
 DEFAULT_UP_THRESHOLD = 220000  # 기본값: 220000
+
+# 중앙 윤곽선 체크 임계값 (0.0 ~ 1.0)
+CENTER_CLEAR_THRESHOLD = 0.2  # 20% 미만이면 중앙이 뚫림 = 직진 (좌우 차이 없을 때만)
 
 # 서보 모터 각도
 DEFAULT_SERVO_1 = 90  # 좌우 각도 (0~180)
@@ -351,33 +360,37 @@ def weighted_gray(image, r_weight, g_weight, b_weight):
 
 def draw_info_on_binary_frame(binary_frame, direction, histogram):
     """
-    이진화 프레임에 방향 및 히스토그램 정보 표시 (개선된 버전)
+    이진화 프레임에 방향 및 히스토그램 정보 표시 (RGB 필터링 버전)
 
     Args:
-        binary_frame: 이진화된 프레임 (0=검정색 도로, 255=테두리/장애물)
-        direction: 주행 방향 ("UP", "LEFT", "RIGHT", "BLOCKED")
+        binary_frame: 이진화된 프레임 (0=검정색 도로, 255=도로선)
+        direction: 주행 방향 ("UP", "LEFT", "RIGHT")
         histogram: 히스토그램 배열
 
     Returns:
         정보가 표시된 컬러 프레임
+    
+    표시 정보:
+    - 방향: LEFT/UP/RIGHT
+    - 히스토그램 비율: L/C/R (낮을수록 주행 가능)
+    - 3등분 구분선 (노란색)
     """
-    # Convert binary image to color (for displaying information)
+    # 컬러 이미지로 변환 (텍스트 표시를 위해)
     color_frame = cv2.cvtColor(binary_frame, cv2.COLOR_GRAY2BGR)
 
-    # Histogram analysis (divided into 3 sections)
+    # 히스토그램 3등분 분석
     length = len(histogram)
-    divide = 3  # Divide into 3 equal sections
-    section_len = length // divide
+    section_len = length // 3
 
-    # Calculate left/center/right area sums (equal division)
+    # 좌/중/우 영역 합계 계산
     left_sum = int(np.sum(histogram[:section_len]))  # 0 ~ 1/3
     center_sum = int(np.sum(histogram[section_len : 2 * section_len]))  # 1/3 ~ 2/3
     right_sum = int(np.sum(histogram[2 * section_len :]))  # 2/3 ~ 3/3
 
-    # Total sum
+    # 전체 합계
     total = left_sum + center_sum + right_sum
 
-    # Calculate percentages
+    # 비율 계산 (도로선 감지 모드: 낮을수록 주행 가능)
     if total > 0:
         left_pct = (left_sum / total) * 100
         center_pct = (center_sum / total) * 100
@@ -385,93 +398,146 @@ def draw_info_on_binary_frame(binary_frame, direction, histogram):
     else:
         left_pct = center_pct = right_pct = 0.0
 
-    # Status panel background (compact and simple)
-    panel_height = 60
+    # 상태 패널 배경 (반투명)
+    panel_height = 80
     overlay = color_frame.copy()
     cv2.rectangle(overlay, (0, 0), (color_frame.shape[1], panel_height), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.75, color_frame, 0.25, 0, color_frame)
 
-    # Text settings
+    # 텍스트 설정
     font = cv2.FONT_HERSHEY_SIMPLEX
     w = color_frame.shape[1]
 
-    # Direction display (English)
+    # 방향 표시
     direction_map = {
         "UP": "FWD",
         "LEFT": "LEFT",
         "RIGHT": "RIGHT",
-        "BLOCKED": "BLOCK",
-        "STOP": "STOP",
     }
     direction_text = direction_map.get(direction, direction)
 
-    # Direction colors
+    # 방향 색상
     direction_color = {
-        "UP": (0, 255, 0),  # Green
-        "LEFT": (0, 255, 255),  # Yellow
-        "RIGHT": (0, 255, 255),  # Yellow
-        "BLOCKED": (0, 0, 255),  # Red
-        "STOP": (128, 128, 128),  # Gray
+        "UP": (0, 255, 0),  # 초록 (직진)
+        "LEFT": (0, 255, 255),  # 노랑 (좌회전)
+        "RIGHT": (0, 255, 255),  # 노랑 (우회전)
     }.get(direction, (255, 255, 255))
 
-    # Simple one-line display
-    # Direction (굵게)
+    # 방향 표시 (크게)
     cv2.putText(
-        color_frame, f"Dir:{direction_text}", (10, 25), font, 0.5, direction_color, 2
+        color_frame, f"Dir:{direction_text}", (10, 25), font, 0.6, direction_color, 2
     )
 
-    # LEFT (굵게)
-    left_color = (100, 100, 255) if left_pct > 30 else (255, 255, 255)
-    left_thickness = 2 if left_pct > 30 else 2
+    # 히스토그램 합계 표시 (작을수록 주행 가능)
     cv2.putText(
         color_frame,
-        f"L:{left_pct:.0f}%",
-        (10, 45),
+        f"L:{left_sum:6d}",
+        (10, 50),
         font,
-        0.5,
+        0.4,
+        (255, 255, 255),
+        1,
+    )
+    cv2.putText(
+        color_frame,
+        f"C:{center_sum:6d}",
+        (w // 2 - 40, 50),
+        font,
+        0.4,
+        (255, 255, 255),
+        1,
+    )
+    cv2.putText(
+        color_frame,
+        f"R:{right_sum:6d}",
+        (w - 90, 50),
+        font,
+        0.4,
+        (255, 255, 255),
+        1,
+    )
+
+    # 비율 표시 (낮을수록 주행 가능)
+    # LEFT - 낮으면 초록, 높으면 빨강
+    left_color = (0, 255, 0) if left_pct < 30 else (0, 0, 255)
+    cv2.putText(
+        color_frame,
+        f"{left_pct:.0f}%",
+        (10, 70),
+        font,
+        0.4,
         left_color,
-        left_thickness,
+        2,
     )
 
-    # CENTER (굵게)
-    center_color = (100, 255, 100) if center_pct > 40 else (255, 255, 255)
+    # CENTER - 낮으면 초록 (뚫림), 높으면 빨강 (막힘)
+    center_color = (0, 255, 0) if center_pct < 20 else (0, 0, 255)
     cv2.putText(
         color_frame,
-        f"C:{center_pct:.0f}%",
-        (w // 2 - 25, 45),
+        f"{center_pct:.0f}%",
+        (w // 2 - 20, 70),
         font,
-        0.5,
+        0.4,
         center_color,
         2,
     )
 
-    # RIGHT (굵게)
-    right_color = (100, 100, 255) if right_pct > 30 else (255, 255, 255)
-    right_thickness = 2 if right_pct > 30 else 2
+    # RIGHT - 낮으면 초록, 높으면 빨강
+    right_color = (0, 255, 0) if right_pct < 30 else (0, 0, 255)
     cv2.putText(
         color_frame,
-        f"R:{right_pct:.0f}%",
-        (w - 70, 45),
+        f"{right_pct:.0f}%",
+        (w - 50, 70),
         font,
-        0.5,
+        0.4,
         right_color,
-        right_thickness,
+        2,
     )
 
-    # Yellow dividing lines (2 lines for 3 equal sections)
+    # 3등분 구분선 (노란색)
     h = color_frame.shape[0]
     line_start_y = panel_height
 
-    # Left boundary (1/3)
+    # 왼쪽 구분선 (1/3)
     cv2.line(
         color_frame, (section_len, line_start_y), (section_len, h), (0, 255, 255), 2
     )
-    # Right boundary (2/3)
+    # 오른쪽 구분선 (2/3)
     cv2.line(
         color_frame,
         (2 * section_len, line_start_y),
         (2 * section_len, h),
         (0, 255, 255),
+        2,
+    )
+
+    # 하단 라벨 표시
+    label_y = h - 10
+    cv2.putText(
+        color_frame,
+        "LEFT",
+        (w // 6 - 20, label_y),
+        font,
+        0.5,
+        (255, 255, 0),
+        2,
+    )
+    cv2.putText(
+        color_frame,
+        "CENTER",
+        (w // 2 - 30, label_y),
+        font,
+        0.5,
+        (0, 255, 0),
+        2,
+    )
+    cv2.putText(
+        color_frame,
+        "RIGHT",
+        (5 * w // 6 - 25, label_y),
+        font,
+        0.5,
+        (255, 255, 0),
         2,
     )
 
@@ -790,6 +856,52 @@ def rotate_servo(servo_id, angle):
 # ============================
 
 
+def analyze_histogram(histogram):
+    """
+    히스토그램 3등분 분석
+
+    분할 방식:
+    - LEFT:   0% ~ 33% (왼쪽 1/3)
+    - CENTER: 33% ~ 66% (중앙 1/3)
+    - RIGHT:  66% ~ 100% (오른쪽 1/3)
+
+    이진화 값 (도로선 감지):
+    - 검정색 도로 = 0 (주행 가능 영역)
+    - 빨간색/회색 도로선 = 255 (경계/막힘)
+
+    히스토그램 합산 해석:
+    - 합이 작을수록 = 검정 도로가 많음 = 주행 가능 영역
+    - 합이 클수록 = 도로선이 많음 = 경계/막힘
+
+    반비례 관계:
+    - ratio가 낮을수록 = 주행 가능
+    - ratio가 높을수록 = 막힘
+    """
+    length = len(histogram)
+
+    # 3등분 경계
+    left_end = length // 3
+    right_start = 2 * length // 3
+
+    # 각 영역의 히스토그램 합계
+    left_sum = int(np.sum(histogram[:left_end]))
+    center_sum = int(np.sum(histogram[left_end:right_start]))
+    right_sum = int(np.sum(histogram[right_start:]))
+
+    # 정규화 (0~1 범위로 변환하여 비율 계산)
+    left_ratio = left_sum / (left_end * 255) if left_end > 0 else 0
+    center_ratio = (
+        center_sum / ((right_start - left_end) * 255)
+        if (right_start - left_end) > 0
+        else 0
+    )
+    right_ratio = (
+        right_sum / ((length - right_start) * 255) if (length - right_start) > 0 else 0
+    )
+
+    return left_sum, center_sum, right_sum, left_ratio, center_ratio, right_ratio
+
+
 def decide_direction(
     histogram,
     direction_threshold,
@@ -802,45 +914,71 @@ def decide_direction(
     roi_bottom_y,
 ):
     """
-    히스토그램 기반 방향 결정 (3등분 방식)
+    히스토그램 기반 방향 결정 (3등분 분석 - RGB 필터링 버전)
 
-    동작 방식:
-    1. 히스토그램을 3개 구역으로 균등 분할 (LEFT, CENTER, RIGHT)
-    2. 좌우 영역의 테두리 검출량 비교
-    3. 좌우 차이가 임계값보다 크면 회전
-    4. 중앙 영역이 막혀있으면 대체 경로 탐색
-    5. 그 외의 경우 직진
+    처리 단계 (우선순위 순):
+    1. 히스토그램 3등분 분석 (LEFT, CENTER, RIGHT)
+    2. 좌우 차이 체크 (최우선) - abs(right - left) > direction_threshold → 회전
+    3. 중앙 윤곽선 체크 - center_ratio < CENTER_CLEAR_THRESHOLD → 직진
+    4. 막다른 골목 감지 - (left + right) / 2 < up_threshold → 랜덤 선택
+    5. 기본 동작 - 직진
 
-    Args:
-        histogram: 이진화된 이미지의 가로 히스토그램 (테두리/장애물 검출)
-        direction_threshold: 좌우 회전 판단 임계값
-        up_threshold: 직진 가능 여부 판단 임계값
+    임계값 설명:
+    - direction_threshold: 좌우 차이 임계값 (최우선)
+      abs(right - left) > threshold → 회전 필요
+      
+    - CENTER_CLEAR_THRESHOLD: 0.2 (20%)
+      center_ratio < 0.2 → 중앙에 윤곽선 적음 → 직진 가능
+      
+    - up_threshold: 막다른 골목 감지 임계값
+      (left + right) / 2 < threshold → 막다른 골목
+
+    로직 (도로선 감지 모드):
+    - 합이 작음 = 검정 도로 많음 = 주행 가능 (도로선 적음)
+    - 합이 큼 = 도로선 많음 = 경계/막힘 (빨간색/회색선)
+
+    우선순위:
+    1. abs(right - left) > threshold → LEFT/RIGHT 회전 (최우선!) ⭐
+    2. center_ratio < 0.2 → 직진 (중앙 뚫림)
+    3. 좌우 평균 < up_threshold → 막다른 골목 → 랜덤 선택
+    4. 기본 → 직진
 
     Returns:
-        방향 문자열 ("UP", "LEFT", "RIGHT", "BLOCKED")
+        방향 문자열 ("UP", "LEFT", "RIGHT")
     """
-    length = len(histogram)
-
-    # 히스토그램을 3개 구역으로 균등 분할
-    DIVIDE = 3
-    section_len = length // DIVIDE
-
-    # 좌/중/우 영역 (각 1/3씩)
-    left = int(np.sum(histogram[:section_len]))  # 0 ~ 1/3
-    center = int(np.sum(histogram[section_len : 2 * section_len]))  # 1/3 ~ 2/3
-    right = int(np.sum(histogram[2 * section_len :]))  # 2/3 ~ 3/3
+    # 1. 히스토그램 3등분 분석
+    left_sum, center_sum, right_sum, left_ratio, center_ratio, right_ratio = (
+        analyze_histogram(histogram)
+    )
 
     if DEBUG_MODE:
+        print(f"Histogram Analysis (Road Line Detection):")
         print(
-            f"Left: {left:6d} | Center: {center:6d} | Right: {right:6d} | Diff(R-L): {right - left:6d}"
+            f"  LEFT:   {left_sum:7d} (ratio: {left_ratio:.3f}) - Lower = More drivable"
+        )
+        print(
+            f"  CENTER: {center_sum:7d} (ratio: {center_ratio:.3f}) - Lower = More drivable"
+        )
+        print(
+            f"  RIGHT:  {right_sum:7d} (ratio: {right_ratio:.3f}) - Lower = More drivable"
+        )
+        print(
+            f"  L-R Diff: {right_sum - left_sum:7d} | Threshold: {direction_threshold}"
         )
 
-    # 좌우 차이가 큰 경우 방향 전환
-    # 우측에 테두리가 많으면 좌회전, 좌측에 테두리가 많으면 우회전
-    if abs(right - left) > direction_threshold:
-        direction = "LEFT" if right > left else "RIGHT"
+    # 2. 좌우 차이 체크 (최우선)
+    # right_sum이 크면 = 오른쪽에 도로선 많음 = 왼쪽으로 회전
+    # left_sum이 크면 = 왼쪽에 도로선 많음 = 오른쪽으로 회전
+    if abs(right_sum - left_sum) > direction_threshold:
+        if right_sum > left_sum:
+            # 오른쪽에 도로선이 많음 = 왼쪽이 더 주행 가능
+            direction = "LEFT"
+        else:
+            # 왼쪽에 도로선이 많음 = 오른쪽이 더 주행 가능
+            direction = "RIGHT"
+
         if DEBUG_MODE:
-            print(f"🔄 Turn {direction} (edge avoidance)")
+            print(f"Decision: Turn {direction} (less road lines on that side)")
 
         # 회전 시 부저 (옵션)
         if USE_BEEP and BEEP_ON_TURN:
@@ -850,94 +988,56 @@ def decide_direction(
 
         return direction
 
-    # 중앙 영역 체크 (테두리/장애물이 너무 많으면 막힌 것)
-    total = left + center + right
-    if total > 0:
-        center_ratio = center / total
-    else:
-        center_ratio = 0
-
-    # 중앙에 테두리/장애물이 너무 많으면 막힌 것으로 판단
-    if center > up_threshold:
+    # 3. 중앙 윤곽선 체크
+    # center_ratio가 낮으면 = 중앙에 검정 도로 많음 = 윤곽선 없음 = 직진 가능
+    if center_ratio < CENTER_CLEAR_THRESHOLD:
         if DEBUG_MODE:
-            print(f"🚫 CENTER BLOCKED! (center={center}, threshold={up_threshold})")
-        car_stop()
-        time.sleep(0.3)
-        return rotate_servo_and_check_direction(
-            detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
-        )
+            print(
+                f"  Center is CLEAR (ratio: {center_ratio:.3f} < {CENTER_CLEAR_THRESHOLD})"
+            )
+            print("Decision: Go STRAIGHT (center has minimal road lines)")
 
-    # 직진 (중앙이 비교적 깨끗함)
-    if DEBUG_MODE:
-        print(f"⬆️  Going straight (center clear: {center_ratio*100:.1f}%)")
-    return "UP"
-
-
-def rotate_servo_and_check_direction(
-    detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
-):
-    """
-    서보 모터 회전으로 대체 경로 확인
-
-    막다른 길에 도달했을 때 호출되어:
-    1. 서보 모터를 회전시켜 주변 탐색
-    2. 좌/우/중앙 영역 분석
-    3. 가장 적합한 방향 반환
-    """
-    global cap
-
-    if DEBUG_MODE:
-        print("🔍 Dead end detected! Searching alternative route...")
-
-    # 서보 모터를 180도로 회전하여 뒤쪽 확인
-    bot.Ctrl_Servo(1, 180)
-    bot.Ctrl_Servo(2, 100)
-    time.sleep(0.5)
-
-    # 새 프레임 캡처
-    ret, frame = cap.read()
-    if not ret:
-        print("❌ Cannot read frame from camera.")
-        return "STOP"
-
-    # 프레임 처리
-    processed_frame, histogram_180 = process_frame(
-        frame, detect_value, r_weight, g_weight, b_weight, roi_top_y, roi_bottom_y
-    )
-    length = len(histogram_180)
-
-    # 3등분 분석
-    section_len = length // 3
-    left = int(np.sum(histogram_180[:section_len]))
-    center = int(np.sum(histogram_180[section_len : 2 * section_len]))
-    right = int(np.sum(histogram_180[2 * section_len :]))
-
-    if DEBUG_MODE:
-        print(f"Alternative scan - Left: {left}, Center: {center}, Right: {right}")
-
-    # 서보 모터 원위치
-    servo_1_angle = cv2.getTrackbarPos("Servo 1 Angle", "Camera Settings")
-    servo_2_angle = cv2.getTrackbarPos("Servo 2 Angle", "Camera Settings")
-    bot.Ctrl_Servo(1, servo_1_angle)
-    bot.Ctrl_Servo(2, servo_2_angle)
-    time.sleep(0.3)
-
-    # 중앙이 가장 비어있으면 (테두리가 적으면) 직진 가능
-    # 테두리가 적다 = 안전하다
-    if center < left and center < right:
-        if DEBUG_MODE:
-            print("✅ Center clear -> Go FORWARD")
         return "UP"
 
-    # 좌우 비교하여 테두리가 적은 쪽으로 회전
-    if left < right:
+    # 4. 막다른 골목 감지
+    # 조건: 좌우 영역의 평균 합이 up_threshold보다 작으면 막힘
+    # (좌우가 비슷하게 막혀있고 전체적으로 도로선이 적음 = 막다른 골목)
+    left_right_avg = (left_sum + right_sum) // 2
+
+    if DEBUG_MODE:
+        print(f"  L-R Average: {left_right_avg:7d} | Up Threshold: {up_threshold}")
+
+    # up_threshold를 좌우 평균으로 비교 (낮으면 막힘)
+    if left_right_avg < up_threshold:
         if DEBUG_MODE:
-            print("✅ Left clearer -> Turn LEFT")
-        return "LEFT"
-    else:
+            print("\n" + "=" * 60)
+            print("WARNING: Dead End Detected!")
+            print("=" * 60)
+            print(f"L-R Average: {left_right_avg} < Threshold: {up_threshold}")
+            print("Action: Random direction selection (no servo search)")
+
+        # Beep alarm for dead end (3 times: beep-beep-beep)
+        if USE_BEEP:
+            for _ in range(3):
+                bot.Ctrl_BEEP_Switch(1)
+                time.sleep(0.15)  # Beep
+                bot.Ctrl_BEEP_Switch(0)
+                time.sleep(0.1)  # Short pause
+
+        # Random direction selection (instead of rotate_servo_and_check_direction)
+        random_direction = random.choice(["LEFT", "RIGHT"])
+
         if DEBUG_MODE:
-            print("✅ Right clearer -> Turn RIGHT")
-        return "RIGHT"
+            print(f"Random Direction Selected: {random_direction}")
+            print("=" * 60 + "\n")
+
+        return random_direction
+
+    # 5. 직진 (기본값)
+    if DEBUG_MODE:
+        print("Decision: Go straight (default)")
+
+    return "UP"
 
 
 def control_car(direction, up_speed, down_speed):
@@ -1007,7 +1107,7 @@ print("  🚗 Raspbot v2 Autopilot Started!")
 print("=" * 50)
 print("Controls:")
 print("  ESC   : Quit")
-print("  SPACE : Pause/Debug")
+print("  SPACE : Motor toggle (ON/OFF) - Camera continues")
 print("  'l'   : Toggle LED Bar")
 print("  'b'   : Test Beep")
 print("=" * 50)
@@ -1015,14 +1115,20 @@ print("\n📺 Display Info:")
 print("  - 1_Frame: Original video + ROI")
 print("  - 4_Processed Frame: Binary + Status panel")
 print("    * Binary: 0=Road(black), 1=Edge/Obstacle(white)")
-print("    * Direction: FORWARD/LEFT TURN/RIGHT TURN/BLOCKED")
-print("    * L/C/R: Edge detection distribution %")
+print("    * Direction: FORWARD/LEFT TURN/RIGHT TURN")
+print("    * L/C/R: Road line detection distribution %")
 print("    * Division lines: Yellow")
 print("=" * 50)
 print("\n💡 LED Bar Toggle:")
 print("  - 'l' key: Toggle LED Bar on/off")
 print("  - Enabled: Auto color change by driving state")
 print("  - Disabled: Always off")
+print("=" * 50)
+print("\n🎯 Algorithm Features (RGB Filter Version):")
+print("  - RGB weighted grayscale for better line detection")
+print("  - 3-way histogram analysis (LEFT/CENTER/RIGHT)")
+print("  - Priority: L-R difference > Center clear > Dead end")
+print("  - Random direction selection for dead end situations")
 print("=" * 50)
 
 frame_count = 0
@@ -1038,11 +1144,10 @@ fps = 0.0
 print("\n" + "=" * 50)
 print("  🚗 Raspbot Autopilot Starting...")
 print("=" * 50)
-print("✅ MOTOR ENABLED (Press 'm' to stop)")
+print("✅ MOTOR ENABLED (Press SPACE to stop)")
 print("\nKeyboard Controls:")
 print("  ESC   : Exit")
-print("  SPACE : Pause")
-print("  'm'   : Motor toggle (ON/OFF)")
+print("  SPACE : Motor toggle (ON/OFF) - Camera continues")
 print("  'l'   : LED toggle")
 print("  'b'   : Buzzer test")
 print("=" * 50 + "\n")
@@ -1196,22 +1301,19 @@ try:
         if key == 27:  # ESC
             print("\n🛑 Stopping...")
             break
-        elif key == 32:  # SPACE
-            print("\n⏸️  Paused. Press any key to continue.")
-            car_stop()
-            current_direction = "STOP"
-            current_speed_left = 0
-            current_speed_right = 0
-            cv2.waitKey()
-        elif key == ord("m") or key == ord("M"):  # Motor toggle
+        elif key == 32:  # SPACE - Motor toggle (ON/OFF)
             motor_enabled = not motor_enabled
             if motor_enabled:
+                print("\n" + "=" * 50)
                 print("🚗 MOTOR ENABLED")
+                print("=" * 50)
             else:
-                car_stop()
+                print("\n" + "=" * 50)
+                print("🛑 MOTOR DISABLED (Camera and display continue)")
+                print("=" * 50)
+                car_stop()  # 즉시 모터 정지
                 current_speed_left = 0
                 current_speed_right = 0
-                print("🛑 MOTOR DISABLED (stopped)")
         elif key == ord("l") or key == ord("L"):  # LED Bar toggle
             led_enabled = not led_enabled
             if led_enabled:

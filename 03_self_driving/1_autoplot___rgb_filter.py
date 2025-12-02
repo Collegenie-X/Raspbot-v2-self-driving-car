@@ -1,25 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Raspbot v2 자율주행 테스트 코드 (기본 기능)
-서보 모터 포함 기본 라인 트레이싱 테스트
+Raspbot v2 자율주행 테스트 코드 (RGB 필터링 버전)
+서보 모터 포함 기본 라인 트레이싱 + RGB 가중치 필터링
 
 Copyright (C): 2015-2024, Shenzhen Yahboom Tech
-Modified: 2025-11-30
+Modified: 2025-12-02
 
 ═══════════════════════════════════════════════════════════
 주요 특징:
 ═══════════════════════════════════════════════════════════
 - 서보 모터 제어 포함 (카메라 각도 조절)
 - 라인 트레이싱 기본 기능 (빨간색/회색 도로선 감지)
+- ⭐ RGB 가중치 기반 그레이스케일 변환 (빛 반사 필터링)
 - 히스토그램 3등분 분석 기반 방향 결정
 - 단계별 주석으로 실행 흐름 명확화
+
+═══════════════════════════════════════════════════════════
+주요 변경사항 (v1.4 - RGB 필터링):
+═══════════════════════════════════════════════════════════
+⭐ RGB 가중치 기반 그레이스케일 변환 추가
+  - R/G/B 채널별 가중치 조정 가능
+  - 도로 검정색의 빛 반사 필터링
+  - 트랙바로 실시간 조정 (R_weight, G_weight, B_weight)
+  
+목적:
+  - 도로 검정색 표면의 빛 반사로 인한 오검출 방지
+  - RGB 채널별 가중치를 조정하여 최적의 도로선 감지
+  - 환경 조명 변화에 강건한 라인 트레이싱
+
+권장 설정:
+  - 밝은 환경: R↓(30), G=중간(40), B↑(60) - 파랑 채널 강조
+  - 어두운 환경: R↑(60), G=중간(40), B↓(30) - 빨강 채널 강조
+  - 빛 반사 심함: B↑↑(70-80) - 파랑 채널 최대 강조
 
 ═══════════════════════════════════════════════════════════
 교육생 실습 과제:
 ═══════════════════════════════════════════════════════════
 - 막다른 길 감지 알고리즘 구현
 - 서보 모터를 활용한 대체 경로 탐색 기능 추가
+- RGB 가중치 최적화 실험
 
 ═══════════════════════════════════════════════════════════
 실행 단계:
@@ -72,6 +92,11 @@ DEFAULT_DETECT_VALUE = 120
 DEFAULT_BRIGHTNESS = 32
 DEFAULT_CONTRAST = 0
 
+# ⭐ RGB 가중치 설정 (빛 반사 필터링)
+DEFAULT_R_WEIGHT = 30  # 빨강 채널 가중치 (0-100)
+DEFAULT_G_WEIGHT = 40  # 초록 채널 가중치 (0-100)
+DEFAULT_B_WEIGHT = 60  # 파랑 채널 가중치 (0-100) - 빛 반사 필터링에 효과적
+
 # 방향 판단 임계값
 DEFAULT_DIRECTION_THRESHOLD = 35000
 DEFAULT_UP_THRESHOLD = 220000
@@ -103,7 +128,8 @@ led_state = False  # LED 상태
 beep_state = False  # 부저 상태
 frame_count = 0  # 프레임 카운터
 
-print("Configuration loaded successfully\n")
+print("Configuration loaded successfully")
+print(f"⭐ RGB Filter: R={DEFAULT_R_WEIGHT}, G={DEFAULT_G_WEIGHT}, B={DEFAULT_B_WEIGHT}\n")
 
 # ============================
 # 2단계: 하드웨어 초기화
@@ -208,9 +234,8 @@ def nothing(x):
 
 
 # 윈도우 생성 (크기 조절 가능)
-# Camera Settings 윈도우를 먼저 생성하고 크기 설정
 cv2.namedWindow("Camera Settings", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("Camera Settings", 500, 800)
+cv2.resizeWindow("Camera Settings", 500, 900)  # RGB 트랙바 추가로 높이 증가
 
 cv2.namedWindow("1_Frame", cv2.WINDOW_NORMAL)
 cv2.namedWindow("2_frame_transformed", cv2.WINDOW_NORMAL)
@@ -222,7 +247,7 @@ cv2.namedWindow("4_Processed Frame", cv2.WINDOW_NORMAL)
 cv2.createTrackbar("Servo_1_Angle", "Camera Settings", DEFAULT_SERVO_1, 180, nothing)
 cv2.createTrackbar("Servo_2_Angle", "Camera Settings", DEFAULT_SERVO_2, 110, nothing)
 
-# 이미지 처리 트랙바 (공백 제거하여 안정성 향상)
+# 이미지 처리 트랙바
 cv2.createTrackbar("ROI_Top_Y", "Camera Settings", 695, 1000, nothing)
 cv2.createTrackbar("ROI_Bottom_Y", "Camera Settings", 812, 1000, nothing)
 cv2.createTrackbar(
@@ -247,7 +272,13 @@ cv2.createTrackbar(
 cv2.createTrackbar("Saturation", "Camera Settings", 0, 100, nothing)
 cv2.createTrackbar("Gain", "Camera Settings", 0, 100, nothing)
 
-print("Trackbars and windows configured successfully\n")
+# ⭐ RGB 가중치 트랙바 추가 (빛 반사 필터링)
+cv2.createTrackbar("R_weight", "Camera Settings", DEFAULT_R_WEIGHT, 100, nothing)
+cv2.createTrackbar("G_weight", "Camera Settings", DEFAULT_G_WEIGHT, 100, nothing)
+cv2.createTrackbar("B_weight", "Camera Settings", DEFAULT_B_WEIGHT, 100, nothing)
+
+print("Trackbars and windows configured successfully")
+print("⭐ RGB weight trackbars added for light reflection filtering\n")
 
 # ============================
 # 4단계: 이미지 처리 함수 정의
@@ -316,13 +347,59 @@ def apply_perspective_transform(frame, pts_src, target_w=320, target_h=240):
     return frame_transformed
 
 
+def weighted_gray(image, r_weight, g_weight, b_weight):
+    """
+    ⭐ RGB 가중치 기반 그레이스케일 변환 (빛 반사 필터링)
+    
+    목적:
+        도로 검정색 표면의 빛 반사로 인한 오검출 방지
+        RGB 채널별 가중치를 조정하여 최적의 도로선 감지
+    
+    Args:
+        image: BGR 컬러 이미지
+        r_weight: 빨강 채널 가중치 (0~100)
+        g_weight: 초록 채널 가중치 (0~100)
+        b_weight: 파랑 채널 가중치 (0~100)
+    
+    Returns:
+        그레이스케일 이미지 (단일 채널)
+    
+    사용 예시:
+        밝은 환경 (빛 반사 심함): R↓(30), G=중간(40), B↑(60-80)
+        어두운 환경: R↑(60), G=중간(40), B↓(30)
+        
+    원리:
+        - 파랑 채널(B)은 빛 반사에 덜 민감
+        - 빨강 채널(R)은 빛 반사에 민감
+        - B 가중치를 높이면 빛 반사 영역이 상대적으로 어둡게 처리됨
+    """
+    # 가중치를 0~1 범위로 정규화
+    r_weight /= 100.0
+    g_weight /= 100.0
+    b_weight /= 100.0
+
+    # OpenCV는 BGR 순서: image[:,:,0]=B, image[:,:,1]=G, image[:,:,2]=R
+    # 가중 합산으로 그레이스케일 생성
+    weighted_gray_frame = cv2.addWeighted(
+        cv2.addWeighted(image[:, :, 2], r_weight, image[:, :, 1], g_weight, 0),
+        1.0,
+        image[:, :, 0],
+        b_weight,
+        0,
+    )
+    
+    return weighted_gray_frame
+
+
 def detect_road_lines(color_frame, gray_frame, detect_value):
     """
-    도로선 감지 (빨간색 + 엷은 회색) - 교육용 단순 버전
-
+    도로선 감지 (빨간색 + 엷은 회색) - RGB 필터링 버전
+    
+    ⭐ 변경사항: gray_frame이 이제 RGB 가중치 기반으로 생성됨
+    
     처리 방식:
     1. HSV 변환하여 빨간색 범위 감지
-    2. 밝기로 엷은 회색(흰색 계열) 감지
+    2. RGB 가중치 기반 그레이스케일로 엷은 회색(흰색 계열) 감지
     3. 두 마스크 결합
     4. 노이즈 제거
 
@@ -351,7 +428,7 @@ def detect_road_lines(color_frame, gray_frame, detect_value):
     # 두 빨간색 마스크 결합
     mask_red = cv2.bitwise_or(mask_red1, mask_red2)
 
-    # 2. 엷은 회색/흰색 감지 (밝기 기준)
+    # 2. 엷은 회색/흰색 감지 (RGB 가중치 기반 그레이스케일 사용)
     # detect_value를 기준으로 밝은 영역 감지
     threshold_gray = max(detect_value - 30, 80)
     _, mask_gray = cv2.threshold(gray_frame, threshold_gray, 255, cv2.THRESH_BINARY)
@@ -372,25 +449,11 @@ def detect_road_lines(color_frame, gray_frame, detect_value):
     return mask_lines
 
 
-def apply_binary_threshold(gray_frame, detect_value):
-    """
-    기본 이진화 (호환성을 위해 유지)
-    실제로는 detect_road_lines 사용 권장
-    """
-    _, binary_frame = cv2.threshold(gray_frame, detect_value, 255, cv2.THRESH_BINARY)
-
-    kernel = np.ones((5, 5), np.uint8)
-    binary_frame = cv2.morphologyEx(binary_frame, cv2.MORPH_CLOSE, kernel)
-    binary_frame = cv2.morphologyEx(binary_frame, cv2.MORPH_OPEN, kernel)
-
-    return binary_frame
-
-
 def visualize_direction_on_frame(
-    binary_frame, direction, left_sum, center_sum, right_sum
+    binary_frame, direction, left_sum, center_sum, right_sum, rgb_weights
 ):
     """
-    프레임에 방향 정보 시각화 (3등분 방식)
+    프레임에 방향 정보 시각화 (3등분 방식 + RGB 가중치 표시)
 
     Args:
         binary_frame: 이진화된 프레임
@@ -398,11 +461,13 @@ def visualize_direction_on_frame(
         left_sum: 좌측 영역 히스토그램 합
         center_sum: 중앙 영역 히스토그램 합
         right_sum: 우측 영역 히스토그램 합
+        rgb_weights: RGB 가중치 튜플 (r, g, b)
 
     시각화 요소:
     - 방향 표시 (DIR: LEFT/UP/RIGHT)
     - 히스토그램 합계 (작을수록 도로 많음)
     - 3등분 영역 구분선 및 라벨
+    - ⭐ RGB 가중치 표시
     """
     # 컬러 이미지로 변환 (텍스트 표시를 위해)
     frame_color = cv2.cvtColor(binary_frame, cv2.COLOR_GRAY2BGR)
@@ -410,7 +475,7 @@ def visualize_direction_on_frame(
 
     # 방향 텍스트 배경
     overlay = frame_color.copy()
-    cv2.rectangle(overlay, (0, 0), (w, 90), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (0, 0), (w, 110), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.7, frame_color, 0.3, 0, frame_color)
 
     # 방향 텍스트 표시
@@ -458,14 +523,16 @@ def visualize_direction_on_frame(
         1,
     )
 
-    # 도로선 감지 설명
+    # ⭐ RGB 가중치 표시
+    r_w, g_w, b_w = rgb_weights
+    rgb_text = f"RGB Filter: R:{r_w} G:{g_w} B:{b_w}"
     cv2.putText(
         frame_color,
-        "White=RoadLine(Red/Gray) Black=Road",
+        rgb_text,
         (10, 100),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.35,
-        (150, 150, 150),
+        (150, 255, 255),
         1,
     )
 
@@ -511,15 +578,15 @@ def visualize_direction_on_frame(
     return frame_color
 
 
-def process_frame(frame, detect_value, roi_top_y, roi_bottom_y):
+def process_frame(frame, detect_value, roi_top_y, roi_bottom_y, r_weight, g_weight, b_weight):
     """
-    프레임 처리 및 도로선 검출
+    프레임 처리 및 도로선 검출 (RGB 필터링 버전)
 
     처리 단계:
     1. 실제 해상도 확인 및 ROI 계산
     2. ROI 영역 시각화
     3. 원근 변환 적용
-    4. 그레이스케일 변환
+    4. ⭐ RGB 가중치 기반 그레이스케일 변환 (빛 반사 필터링)
     5. 도로선 감지 (빨간색 + 엷은 회색)
     """
     # 1. 실제 해상도 확인 및 ROI 계산
@@ -538,8 +605,8 @@ def process_frame(frame, detect_value, roi_top_y, roi_bottom_y):
     frame_transformed = apply_perspective_transform(frame, pts_src)
     cv2.imshow("2_frame_transformed", frame_transformed)
 
-    # 4. 그레이스케일 변환 (참고용)
-    gray_frame = cv2.cvtColor(frame_transformed, cv2.COLOR_BGR2GRAY)
+    # 4. ⭐ RGB 가중치 기반 그레이스케일 변환 (빛 반사 필터링)
+    gray_frame = weighted_gray(frame_transformed, r_weight, g_weight, b_weight)
     cv2.imshow("3_gray_frame", gray_frame)
 
     # 5. 도로선 감지 (빨간색 + 엷은 회색)
@@ -549,7 +616,8 @@ def process_frame(frame, detect_value, roi_top_y, roi_bottom_y):
     return binary_frame
 
 
-print("Image processing functions defined successfully\n")
+print("Image processing functions defined successfully")
+print("⭐ RGB weighted grayscale conversion added\n")
 
 # ============================
 # 5단계: 차량 제어 함수 정의
@@ -711,7 +779,7 @@ def decide_direction(
     histogram, direction_threshold, up_threshold, detect_value, roi_top_y, roi_bottom_y
 ):
     """
-    히스토그램 기반 방향 결정 (3등분 분석 - 교육용 단순 버전)
+    히스토그램 기반 방향 결정 (3등분 분석 - RGB 필터링 버전)
 
     처리 단계 (우선순위 순):
     1. 히스토그램 3등분 분석 (LEFT, CENTER, RIGHT)
@@ -737,7 +805,7 @@ def decide_direction(
     우선순위:
     1. abs(right - left) > threshold → LEFT/RIGHT 회전 (최우선!) ⭐
     2. center_ratio < 0.2 → 직진 (중앙 뚫림)
-    3. 좌우 평균 < up_threshold → 막다른 골목 → 부저 3번 + 랜덤
+    3. 좌우 평균 < up_threshold → 막다른 골목 → 랜덤 선택
     4. 기본 → 직진
 
     Returns:
@@ -907,6 +975,10 @@ def read_trackbar_values():
             "Direction_Threshold", "Camera Settings"
         ),
         "up_threshold": cv2.getTrackbarPos("Up_Threshold", "Camera Settings"),
+        # ⭐ RGB 가중치 읽기
+        "r_weight": cv2.getTrackbarPos("R_weight", "Camera Settings"),
+        "g_weight": cv2.getTrackbarPos("G_weight", "Camera Settings"),
+        "b_weight": cv2.getTrackbarPos("B_weight", "Camera Settings"),
     }
     return values
 
@@ -962,9 +1034,14 @@ print("  STEP 9: Starting Main Loop")
 print("=" * 50)
 print("Controls:")
 print("  ESC   : Exit")
-print("  SPACE : Pause/Resume (Motor Stop)")
+print("  SPACE : Motor toggle (ON/OFF) - Camera continues")
 print("  'l'   : Toggle LED")
 print("  'b'   : Toggle Beeper")
+print("=" * 50)
+print("⭐ RGB Filter Feature:")
+print("  Adjust R/G/B weight trackbars to filter light reflection")
+print("  Bright environment: R↓(30), G=mid(40), B↑(60-80)")
+print("  Dark environment: R↑(60), G=mid(40), B↓(30)")
 print("=" * 50)
 
 start_time = time.time()
@@ -1005,15 +1082,22 @@ try:
         rotate_servo(1, params["servo_1_angle"])
         rotate_servo(2, params["servo_2_angle"])
 
-        # 프레임 처리
+        # ⭐ RGB 가중치 적용하여 프레임 처리
         processed_frame = process_frame(
-            frame, params["detect_value"], params["roi_top_y"], params["roi_bottom_y"]
+            frame, 
+            params["detect_value"], 
+            params["roi_top_y"], 
+            params["roi_bottom_y"],
+            params["r_weight"],
+            params["g_weight"],
+            params["b_weight"]
         )
         histogram = np.sum(processed_frame, axis=0)
 
         # 방향 결정 및 제어
         if DEBUG_MODE and frame_count % 10 == 0:
             print(f"\n--- Frame {frame_count} ---")
+            print(f"RGB Weights: R={params['r_weight']}, G={params['g_weight']}, B={params['b_weight']}")
 
         direction, hist_left, hist_center, hist_right = decide_direction(
             histogram,
@@ -1024,9 +1108,10 @@ try:
             params["roi_bottom_y"],
         )
 
-        # 방향 정보 시각화
+        # 방향 정보 시각화 (RGB 가중치 포함)
+        rgb_weights = (params["r_weight"], params["g_weight"], params["b_weight"])
         processed_frame_visual = visualize_direction_on_frame(
-            processed_frame, direction, hist_left, hist_center, hist_right
+            processed_frame, direction, hist_left, hist_center, hist_right, rgb_weights
         )
         cv2.imshow("4_Processed Frame", processed_frame_visual)
 
@@ -1060,3 +1145,4 @@ except Exception as e:
 # ============================
 finally:
     cleanup_and_exit(bot, cap)
+

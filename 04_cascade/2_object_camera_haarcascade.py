@@ -38,6 +38,9 @@ R_WEIGHT_INITIAL = 33
 G_WEIGHT_INITIAL = 33
 B_WEIGHT_INITIAL = 33
 
+# 감지 입력 소스 초기값 (0: frame 컬러, 1: gray 그레이스케일)
+DETECT_SOURCE_INITIAL = 0
+
 # Haar Cascade 설정
 CASCADE_FILE = "cascade.xml"
 SCALE_FACTOR = 1.1
@@ -460,6 +463,11 @@ def initialize_ui():
         "B_weight", window_name, B_WEIGHT_INITIAL, 100, trackbar_callback
     )
 
+    # 감지 입력 소스 트랙바 (0: frame 컬러, 1: gray 그레이스케일)
+    cv2.createTrackbar(
+        "Detect_Source", window_name, DETECT_SOURCE_INITIAL, 1, trackbar_callback
+    )
+
     print("UI initialized")
     return window_name
 
@@ -487,6 +495,7 @@ def get_trackbar_values(window_name):
         "r_weight": cv2.getTrackbarPos("R_weight", window_name),
         "g_weight": cv2.getTrackbarPos("G_weight", window_name),
         "b_weight": cv2.getTrackbarPos("B_weight", window_name),
+        "detect_source": cv2.getTrackbarPos("Detect_Source", window_name),
     }
 
 
@@ -558,6 +567,7 @@ def main():
     print("    * Servo angles")
     print("    * Camera settings")
     print("    * RGB weights for grayscale conversion")
+    print("    * Detect_Source: 0=Frame(Color), 1=Gray(Weighted)")
     print("=" * 60)
 
     # 카메라 초기화
@@ -664,17 +674,25 @@ def main():
             # FPS 계산
             fps = calculate_fps(frame_counter, start_time)
 
-            # 가중치 기반 그레이스케일 변환
+            # 가중치 기반 그레이스케일 변환 (먼저 수행)
             gray = weighted_grayscale_conversion(
                 frame, params["r_weight"], params["g_weight"], params["b_weight"]
             )
 
-            # 그레이스케일 이미지 표시
-            cv2.imshow("1__Gray_Image", gray)
+            # 감지 입력 소스 선택 (0: frame 컬러, 1: gray 그레이스케일)
+            if params["detect_source"] == 0:
+                detect_input = frame
+                source_name = "Frame (Color)"
+            else:
+                detect_input = gray
+                source_name = "Gray (Weighted)"
 
             # 객체 감지
-            detected_objects = detect_objects(cascade, gray)
+            detected_objects = detect_objects(cascade, detect_input)
             detected_count = len(detected_objects)
+
+            # 그레이스케일 이미지 표시
+            cv2.imshow("1__Gray_Image", gray)
 
             # FPS 정보 표시 (오른쪽 하단)
             fps_text = f"FPS: {fps:.1f}"
@@ -685,6 +703,18 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (0, 255, 0),
+                2,
+            )
+
+            # 감지 소스 정보 표시 (왼쪽 하단)
+            source_text = f"Source: {source_name}"
+            cv2.putText(
+                frame,
+                source_text,
+                (10, CAMERA_HEIGHT - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 0, 255),  # 마젠타 색상
                 2,
             )
 

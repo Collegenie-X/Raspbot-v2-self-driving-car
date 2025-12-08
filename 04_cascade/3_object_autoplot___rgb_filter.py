@@ -321,8 +321,26 @@ cv2.createTrackbar("R_weight", "Camera Settings", DEFAULT_R_WEIGHT, 100, nothing
 cv2.createTrackbar("G_weight", "Camera Settings", DEFAULT_G_WEIGHT, 100, nothing)
 cv2.createTrackbar("B_weight", "Camera Settings", DEFAULT_B_WEIGHT, 100, nothing)
 
+# ⭐⭐ 객체 감지 프레임 선택 트랙바 (어떤 프레임에서 감지할지)
+# 0: 원본 frame (컬러)
+# 1: frame_transformed (원근 변환된 프레임)
+# 2: gray_frame (그레이스케일)
+cv2.createTrackbar("Detect_Frame_Source", "Camera Settings", 0, 2, nothing)
+
+# ⭐⭐ 객체 감지 반응 모드 트랙바
+# 0: 정지만 (STOP_ONLY) - 감지 시 정지 + 부저
+# 1: 후진 (REVERSE) - 감지 시 정지 + 후진
+# 2: 회피 (AVOID) - 감지 시 좌/우 회피
+# 3: 무시 (IGNORE) - 감지해도 계속 주행
+cv2.createTrackbar("Detect_Reaction_Mode", "Camera Settings", 0, 3, nothing)
+
+# ⭐⭐ 반응 시간 트랙바 (0.1초 단위, 1~30 = 0.1초~3초)
+cv2.createTrackbar("Reaction_Duration", "Camera Settings", 10, 30, nothing)
+
 print("Trackbars and windows configured successfully")
-print("⭐ RGB weight trackbars added for light reflection filtering\n")
+print("⭐ RGB weight trackbars added for light reflection filtering")
+print("⭐⭐ Detect_Frame_Source: 0=Original, 1=Transformed, 2=Gray")
+print("⭐⭐ Detect_Reaction_Mode: 0=Stop, 1=Reverse, 2=Avoid, 3=Ignore\n")
 
 # ============================
 # 4단계: 이미지 처리 함수 정의
@@ -673,28 +691,40 @@ print("  Defining Sign Detection Functions")
 print("=" * 50)
 
 
-def detect_traffic_signs(frame, r_weight, g_weight, b_weight):
+def detect_traffic_signs(
+    detect_frame, display_frame, r_weight, g_weight, b_weight, frame_source=0
+):
     """
     표지판 감지 함수 (Stop, No Drive) - Early If 패턴용
 
+    ⭐⭐ 트랙바로 감지할 프레임 소스 선택 가능
+
     처리 과정:
-    1. RGB 가중치 기반 그레이스케일 변환
+    1. 선택된 프레임 소스에서 그레이스케일 변환
     2. Haar Cascade로 정지 표지판 감지
     3. Haar Cascade로 통행금지 표지판 감지
     4. 감지된 표지판에 빨간색 윤곽선(width=2) + 텍스트 표시
 
     Args:
-        frame: 원본 프레임
+        detect_frame: 감지에 사용할 프레임 (선택된 소스)
+        display_frame: 결과 표시용 프레임 (원본)
         r_weight, g_weight, b_weight: RGB 가중치
+        frame_source: 프레임 소스 (0=원본, 1=변환, 2=그레이)
 
     Returns:
-        tuple: (stop_detected, no_drive_detected, annotated_frame)
+        tuple: (stop_detected, no_drive_detected, annotated_frame, detection_info)
                - stop_detected: 정지 표지판 감지 여부 (bool)
                - no_drive_detected: 통행금지 표지판 감지 여부 (bool)
                - annotated_frame: 빨간색 윤곽선 + 텍스트가 추가된 프레임
+               - detection_info: 감지 상세 정보 딕셔너리
     """
-    # RGB 가중치 기반 그레이스케일 변환
-    gray_frame = weighted_gray(frame, r_weight, g_weight, b_weight)
+    # 감지용 그레이스케일 변환 (이미 그레이면 그대로 사용)
+    if len(detect_frame.shape) == 2:
+        # 이미 그레이스케일
+        gray_frame = detect_frame
+    else:
+        # RGB 가중치 기반 그레이스케일 변환
+        gray_frame = weighted_gray(detect_frame, r_weight, g_weight, b_weight)
 
     # 정지 표지판 감지
     stop_signs = stop_cascade.detectMultiScale(
@@ -710,35 +740,108 @@ def detect_traffic_signs(frame, r_weight, g_weight, b_weight):
     no_drive_detected = len(no_drive_signs) > 0
 
     # 프레임에 감지 결과 그리기
-    annotated_frame = frame.copy()
+    annotated_frame = display_frame.copy()
+    h, w = annotated_frame.shape[:2]
 
-    # 정지 표지판 표시 (빨간색 윤곽선, width=2)
-    for x, y, w, h in stop_signs:
-        cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), (0, 0, 255), 3)
+    # 프레임 소스 정보 표시
+    source_names = {0: "Original", 1: "Transformed", 2: "Grayscale"}
+    source_text = f"Detect Source: {source_names.get(frame_source, 'Unknown')}"
+    cv2.putText(
+        annotated_frame,
+        source_text,
+        (10, h - 10),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (255, 255, 0),
+        1,
+    )
+
+    # 감지 정보 저장
+    detection_info = {
+        "stop_count": len(stop_signs),
+        "no_drive_count": len(no_drive_signs),
+        "stop_positions": [],
+        "no_drive_positions": [],
+        "largest_object": None,
+        "object_position": "NONE",  # LEFT, CENTER, RIGHT
+    }
+
+    # 정지 표지판 표시 (빨간색 윤곽선, width=3)
+    for x, y, obj_w, obj_h in stop_signs:
+        cv2.rectangle(annotated_frame, (x, y), (x + obj_w, y + obj_h), (0, 0, 255), 3)
         cv2.putText(
             annotated_frame,
-            "Stop",
-            (x + 5, y + 10),
+            f"STOP ({obj_w}x{obj_h})",
+            (x, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
+            0.6,
             (0, 0, 255),
             2,
         )
+        detection_info["stop_positions"].append(
+            {
+                "x": x,
+                "y": y,
+                "w": obj_w,
+                "h": obj_h,
+                "center_x": x + obj_w // 2,
+                "size": obj_w * obj_h,
+            }
+        )
 
-    # 통행금지 표지판 표시 (빨간색 윤곽선, width=2)
-    for x, y, w, h in no_drive_signs:
-        cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
+    # 통행금지 표지판 표시 (파란색 윤곽선, width=3)
+    for x, y, obj_w, obj_h in no_drive_signs:
+        cv2.rectangle(annotated_frame, (x, y), (x + obj_w, y + obj_h), (255, 0, 0), 3)
         cv2.putText(
             annotated_frame,
-            "No Drive",
-            (x + 5, y + 10),
+            f"NO DRIVE ({obj_w}x{obj_h})",
+            (x, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 0, 255),
+            0.6,
+            (255, 0, 0),
+            2,
+        )
+        detection_info["no_drive_positions"].append(
+            {
+                "x": x,
+                "y": y,
+                "w": obj_w,
+                "h": obj_h,
+                "center_x": x + obj_w // 2,
+                "size": obj_w * obj_h,
+            }
+        )
+
+    # 가장 큰 객체 찾기 및 위치 판단
+    all_objects = (
+        detection_info["stop_positions"] + detection_info["no_drive_positions"]
+    )
+    if all_objects:
+        largest = max(all_objects, key=lambda obj: obj["size"])
+        detection_info["largest_object"] = largest
+
+        # 좌/중앙/우 위치 판단
+        center_x = largest["center_x"]
+        if center_x < w // 3:
+            detection_info["object_position"] = "LEFT"
+        elif center_x > 2 * w // 3:
+            detection_info["object_position"] = "RIGHT"
+        else:
+            detection_info["object_position"] = "CENTER"
+
+        # 위치 정보 표시
+        pos_text = f"Position: {detection_info['object_position']}"
+        cv2.putText(
+            annotated_frame,
+            pos_text,
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 255),
             2,
         )
 
-    return stop_detected, no_drive_detected, annotated_frame
+    return stop_detected, no_drive_detected, annotated_frame, detection_info
 
 
 def beep_for_sign_detection():
@@ -757,7 +860,175 @@ def beep_for_sign_detection():
         print(f"Beep error: {e}")
 
 
-print("Sign detection functions defined successfully\n")
+def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_speed):
+    """
+    ⭐⭐ 객체 감지 시 반응 동작 함수
+
+    반응 모드별 동작:
+        0 (STOP_ONLY): 정지 + 부저 + 대기
+        1 (REVERSE): 정지 + 부저 + 후진
+        2 (AVOID): 정지 + 객체 반대 방향 회피
+        3 (IGNORE): 감지해도 계속 주행
+
+    Args:
+        detection_info: 감지 정보 딕셔너리 (detect_traffic_signs에서 반환)
+        reaction_mode: 반응 모드 (0~3)
+        duration: 반응 시간 (0.1초 단위, 10=1초)
+        up_speed: 전진 속도
+        down_speed: 회전/후진 속도
+
+    Returns:
+        str: 수행된 동작 이름
+    """
+    # 반응 시간 계산 (0.1초 단위 → 초)
+    reaction_time = duration / 10.0
+    reaction_time = max(0.1, min(reaction_time, 3.0))  # 0.1초 ~ 3초 제한
+
+    object_position = detection_info.get("object_position", "NONE")
+
+    # ============================
+    # 모드 3: 무시 (IGNORE)
+    # ============================
+    if reaction_mode == 3:
+        if DEBUG_MODE:
+            print("🟢 Detection IGNORED - Continuing auto drive")
+        return "IGNORE"
+
+    # ============================
+    # 모드 0: 정지만 (STOP_ONLY)
+    # ============================
+    if reaction_mode == 0:
+        if DEBUG_MODE:
+            print(f"🔴 STOP_ONLY mode - Stopping for {reaction_time:.1f}s")
+
+        # 정지
+        car_stop()
+
+        # 부저
+        if USE_BEEP:
+            beep_for_sign_detection()
+
+        # 대기
+        time.sleep(reaction_time)
+
+        return "STOP_ONLY"
+
+    # ============================
+    # 모드 1: 후진 (REVERSE)
+    # ============================
+    elif reaction_mode == 1:
+        if DEBUG_MODE:
+            print(f"🟡 REVERSE mode - Backing up for {reaction_time:.1f}s")
+
+        # 정지
+        car_stop()
+
+        # 부저 (2회)
+        if USE_BEEP:
+            for _ in range(2):
+                bot.Ctrl_BEEP_Switch(1)
+                time.sleep(0.15)
+                bot.Ctrl_BEEP_Switch(0)
+                time.sleep(0.1)
+
+        # 후진 (음수 속도 = 후진)
+        set_motor_speeds(-down_speed, -down_speed, -down_speed, -down_speed)
+        time.sleep(reaction_time)
+
+        # 정지
+        car_stop()
+
+        return "REVERSE"
+
+    # ============================
+    # 모드 2: 회피 (AVOID)
+    # ============================
+    elif reaction_mode == 2:
+        if DEBUG_MODE:
+            print(f"🟠 AVOID mode - Position: {object_position}")
+
+        # 정지
+        car_stop()
+
+        # 부저
+        if USE_BEEP:
+            beep_for_sign_detection()
+
+        # 객체 위치에 따라 반대 방향으로 회피
+        if object_position == "LEFT":
+            # 왼쪽에 객체 → 오른쪽으로 회피
+            if DEBUG_MODE:
+                print("  → Avoiding to RIGHT")
+            car_right(up_speed, down_speed)
+            time.sleep(reaction_time)
+
+        elif object_position == "RIGHT":
+            # 오른쪽에 객체 → 왼쪽으로 회피
+            if DEBUG_MODE:
+                print("  → Avoiding to LEFT")
+            car_left(down_speed, up_speed)
+            time.sleep(reaction_time)
+
+        elif object_position == "CENTER":
+            # 중앙에 객체 → 후진 후 랜덤 회피
+            if DEBUG_MODE:
+                print("  → Center object! Reverse then random avoid")
+
+            # 후진
+            set_motor_speeds(-down_speed, -down_speed, -down_speed, -down_speed)
+            time.sleep(reaction_time / 2)
+
+            # 랜덤 방향 선택
+            avoid_dir = random.choice(["LEFT", "RIGHT"])
+            if avoid_dir == "LEFT":
+                car_left(down_speed, up_speed)
+            else:
+                car_right(up_speed, down_speed)
+            time.sleep(reaction_time / 2)
+
+        else:
+            # 위치 불명 → 정지만
+            time.sleep(reaction_time)
+
+        # 정지
+        car_stop()
+
+        return "AVOID"
+
+    return "UNKNOWN"
+
+
+def get_detection_frame(frame, frame_transformed, gray_frame, frame_source):
+    """
+    ⭐⭐ 트랙바로 선택된 프레임 소스 반환
+
+    Args:
+        frame: 원본 프레임 (컬러)
+        frame_transformed: 원근 변환된 프레임
+        gray_frame: 그레이스케일 프레임
+        frame_source: 선택된 소스 (0, 1, 2)
+
+    Returns:
+        선택된 프레임
+
+    프레임 소스:
+        0: 원본 frame (컬러) - 전체 화면에서 감지
+        1: frame_transformed (원근 변환) - ROI 영역에서 감지
+        2: gray_frame (그레이스케일) - 전처리된 영역에서 감지
+    """
+    if frame_source == 0:
+        return frame
+    elif frame_source == 1:
+        return frame_transformed
+    elif frame_source == 2:
+        return gray_frame
+    else:
+        return frame  # 기본값
+
+
+print("Sign detection functions defined successfully")
+print("⭐⭐ react_to_detection() function added")
+print("⭐⭐ get_detection_frame() function added\n")
 
 # ============================
 # 5단계: 차량 제어 함수 정의 (기어 모터)
@@ -1139,6 +1410,14 @@ def read_trackbar_values():
         "r_weight": cv2.getTrackbarPos("R_weight", "Camera Settings"),
         "g_weight": cv2.getTrackbarPos("G_weight", "Camera Settings"),
         "b_weight": cv2.getTrackbarPos("B_weight", "Camera Settings"),
+        # ⭐⭐ 객체 감지 설정 읽기
+        "detect_frame_source": cv2.getTrackbarPos(
+            "Detect_Frame_Source", "Camera Settings"
+        ),
+        "detect_reaction_mode": cv2.getTrackbarPos(
+            "Detect_Reaction_Mode", "Camera Settings"
+        ),
+        "reaction_duration": cv2.getTrackbarPos("Reaction_Duration", "Camera Settings"),
     }
     return values
 
@@ -1203,9 +1482,20 @@ print("  Adjust R/G/B weight trackbars to filter light reflection")
 print("  Bright environment: R↓(30), G=mid(40), B↑(60-80)")
 print("  Dark environment: R↑(60), G=mid(40), B↓(30)")
 print("=" * 50)
+print("⭐⭐ Detection Frame Source (Detect_Frame_Source):")
+print("  0: Original frame (컬러 원본)")
+print("  1: Transformed frame (원근 변환)")
+print("  2: Grayscale frame (그레이스케일)")
+print("=" * 50)
+print("⭐⭐ Reaction Mode (Detect_Reaction_Mode):")
+print("  0: STOP_ONLY  - 정지 + 부저 + 대기")
+print("  1: REVERSE    - 정지 + 부저 + 후진")
+print("  2: AVOID      - 정지 + 객체 반대방향 회피")
+print("  3: IGNORE     - 감지해도 계속 주행")
+print("=" * 50)
 print("⭐ Traffic Sign Detection (Early If Pattern):")
-print("  🛑 Stop Sign → Red outline + Beep + 1s stop → Continue")
-print("  🚫 No Drive Sign → Red outline + Beep + 1s stop → Continue")
+print("  🛑 Stop Sign → Reaction Mode 적용")
+print("  🚫 No Drive Sign → Reaction Mode 적용")
 print("  ✅ No Sign → Auto driving (line tracing)")
 print("=" * 50)
 
@@ -1247,38 +1537,72 @@ try:
         rotate_servo(1, params["servo_1_angle"])
         rotate_servo(2, params["servo_2_angle"])
 
-        # ⭐ Early If: 표지판 감지 먼저 체크 (정지, 통행금지)
-        stop_detected, no_drive_detected, sign_frame = detect_traffic_signs(
+        # ⭐⭐ 먼저 프레임 처리하여 다양한 소스 준비
+        actual_h, actual_w = frame.shape[:2]
+        pts_src, top_y, bottom_y = calculate_roi_points(
+            actual_w, actual_h, params["roi_top_y"], params["roi_bottom_y"]
+        )
+        frame_transformed = apply_perspective_transform(frame, pts_src)
+        gray_frame = weighted_gray(
             frame, params["r_weight"], params["g_weight"], params["b_weight"]
         )
 
-        # 표지판 감지 시: 부저 + 1초 정지 후 다음 루프로
+        # ⭐⭐ 트랙바에서 선택된 프레임 소스 가져오기
+        detect_frame = get_detection_frame(
+            frame, frame_transformed, gray_frame, params["detect_frame_source"]
+        )
+
+        # ⭐ Early If: 표지판 감지 먼저 체크 (정지, 통행금지)
+        stop_detected, no_drive_detected, sign_frame, detection_info = (
+            detect_traffic_signs(
+                detect_frame,  # 감지용 프레임 (선택된 소스)
+                frame,  # 표시용 프레임 (원본)
+                params["r_weight"],
+                params["g_weight"],
+                params["b_weight"],
+                params["detect_frame_source"],
+            )
+        )
+
+        # 표지판 감지 시: 선택된 반응 모드로 대응
         if stop_detected or no_drive_detected:
             cv2.imshow("5_Sign_Detection", sign_frame)
 
-            # 차량 즉시 정지
-            car_stop()
-
-            # 부저 울리기
-            if USE_BEEP:
-                beep_for_sign_detection()
-
             # 디버그 메시지
-            if stop_detected and DEBUG_MODE:
-                print("🛑 STOP sign detected! Stopping for 1 second...")
-            if no_drive_detected and DEBUG_MODE:
-                print("🚫 NO DRIVE sign detected! Stopping for 1 second...")
+            reaction_mode = params["detect_reaction_mode"]
+            mode_names = {0: "STOP_ONLY", 1: "REVERSE", 2: "AVOID", 3: "IGNORE"}
 
-            # 1초 대기
-            time.sleep(1)
+            if DEBUG_MODE:
+                if stop_detected:
+                    print(
+                        f"🛑 STOP sign detected! Position: {detection_info['object_position']}"
+                    )
+                if no_drive_detected:
+                    print(
+                        f"🚫 NO DRIVE sign detected! Position: {detection_info['object_position']}"
+                    )
+                print(f"   Reaction Mode: {mode_names.get(reaction_mode, 'UNKNOWN')}")
+
+            # ⭐⭐ 선택된 반응 모드로 대응
+            action = react_to_detection(
+                detection_info,
+                reaction_mode,
+                params["reaction_duration"],
+                params["motor_up_speed"],
+                params["motor_down_speed"],
+            )
+
+            if DEBUG_MODE:
+                print(f"   Action Performed: {action}")
 
             # 키 입력 처리 (표지판 감지 중에도 종료 가능)
             result = handle_keyboard_input()
             if result == "EXIT":
                 break
 
-            # 다음 루프로 (자율주행 건너뛰기)
-            continue
+            # 무시 모드가 아니면 다음 루프로 (자율주행 건너뛰기)
+            if reaction_mode != 3:
+                continue
 
         # ⭐ 표지판 없을 경우: 정상 자율주행
         # RGB 가중치 적용하여 프레임 처리

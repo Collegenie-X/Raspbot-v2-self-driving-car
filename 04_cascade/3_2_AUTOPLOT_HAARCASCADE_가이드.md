@@ -1,22 +1,24 @@
 # 🚗 Raspbot v2 자율주행 + Haar Cascade 표지판 감지 가이드
 
-> `3_object_autoplot___rgb_filter.py` 코드 분석 및 사용법  
-> RGB 필터링 + Haar Cascade 객체 감지 + 다양한 반응 모드
+> `3_object_autoplot___rgb_filter.py` v1.6 코드 분석 및 사용법  
+> RGB 필터링 + Haar Cascade 객체 감지 + 상태 기반 제어  
+> **최종 업데이트**: 2025-12-09 (v1.6 - 표지판 지속 감지)
 
 ---
 
 ## 📑 목차
 
 1. [개요](#-개요)
-2. [시스템 아키텍처](#-시스템-아키텍처)
-3. [프로그램 실행 흐름](#-프로그램-실행-흐름)
-4. [핵심 알고리즘](#-핵심-알고리즘)
-5. [트랙바 설정 가이드](#-트랙바-설정-가이드)
-6. [주요 함수 설명](#-주요-함수-설명)
-7. [감지 프레임 소스 선택](#-감지-프레임-소스-선택)
-8. [반응 모드 상세](#-반응-모드-상세)
-9. [소스 코드 핵심 부분](#-소스-코드-핵심-부분)
-10. [트러블슈팅](#-트러블슈팅)
+2. [⭐ v1.6 주요 변경사항](#-v16-주요-변경사항)
+3. [시스템 아키텍처](#-시스템-아키텍처)
+4. [프로그램 실행 흐름](#-프로그램-실행-흐름)
+5. [핵심 알고리즘](#-핵심-알고리즘)
+6. [트랙바 설정 가이드](#-트랙바-설정-가이드)
+7. [주요 함수 설명](#-주요-함수-설명)
+8. [감지 프레임 소스 선택](#-감지-프레임-소스-선택)
+9. [반응 모드 상세](#-반응-모드-상세)
+10. [소스 코드 핵심 부분](#-소스-코드-핵심-부분)
+11. [트러블슈팅](#-트러블슈팅)
 
 ---
 
@@ -26,14 +28,96 @@
 
 ### 주요 특징
 
-| 기능 | 설명 |
-|------|------|
-| **라인 트레이싱** | 빨간색/회색 도로선 기반 자율주행 |
-| **RGB 필터링** | 빛 반사 제거를 위한 가중치 기반 그레이스케일 |
-| **Haar Cascade 감지** | Stop/No Drive 표지판 실시간 감지 |
-| **다중 프레임 소스** | 원본/변환/그레이 중 감지 소스 선택 |
-| **다양한 반응 모드** | 정지/후진/회피/무시 선택 가능 |
-| **Early If 패턴** | 표지판 먼저 확인 → 없으면 자율주행 |
+| 기능 | 설명 | v1.6 개선 |
+|------|------|----------|
+| **라인 트레이싱** | 빨간색/회색 도로선 기반 자율주행 | - |
+| **RGB 필터링** | 빛 반사 제거를 위한 가중치 기반 그레이스케일 | - |
+| **Haar Cascade 감지** | Stop/No Drive 표지판 실시간 감지 | ✅ 매 프레임 체크 |
+| **⭐ 상태 기반 제어** | 표지판이 사라질 때까지 계속 정지 | ✅ NEW! |
+| **⭐ 부저 1회만** | 표지판 처음 감지 시에만 부저 울림 | ✅ NEW! |
+| **다중 프레임 소스** | 원본/변환/그레이 중 감지 소스 선택 | - |
+| **다양한 반응 모드** | 정지/후진/회피/무시 선택 가능 | - |
+| **Early If 패턴** | 표지판 먼저 확인 → 없으면 자율주행 | ✅ 개선 |
+
+---
+
+## ⭐ v1.6 주요 변경사항
+
+**업데이트 날짜**: 2025-12-09  
+**변경 사유**: 사용자 피드백 - "Stop sign이 사라질 때까지 정지해야 함, 부저는 1회만"
+
+### 변경 내용 요약
+
+| 항목 | Before (v1.5) | After (v1.6) | 개선 효과 |
+|:----:|:------------:|:------------:|:--------:|
+| **감지 방식** | 쿨다운 (2.5초) | 상태 기반 (매 프레임) | ✅ 안전성 향상 |
+| **모터 정지** | 0.1초만 | 표지판 사라질 때까지 | ✅ 안전 정지 |
+| **부저** | 2.5초마다 반복 | 처음 1회만 (0.1초) | ✅ 소음 최소화 |
+| **Frame 처리** | 계속 진행 | 계속 진행 | ✅ 유지 |
+| **자율주행 복귀** | 즉시 (위험) | 표지판 사라진 후 | ✅ 안전 |
+
+### 핵심 개선 사항
+
+#### 1️⃣ **쿨다운 시스템 제거** ❌
+```python
+# v1.5 (제거됨)
+SIGN_COOLDOWN_TIME = 2.5
+last_stop_detection_time = 0
+
+# 문제: 표지판이 아직 있어도 2.5초 후 무시
+```
+
+#### 2️⃣ **상태 변수 추가** ✅
+```python
+# v1.6 (새로 추가)
+stop_sign_active = False       # 현재 표지판 감지 중인지
+stop_beep_played = False       # 부저 울렸는지
+no_drive_sign_active = False
+no_drive_beep_played = False
+```
+
+#### 3️⃣ **작동 방식 변경**
+
+**Before (v1.5) - 쿨다운**:
+```
+표지판 감지 → 0.1초 정지 → 부저 → 
+2.5초 대기 → 자율주행 (표지판 아직 있음!) → 
+2.5초 후 다시 감지 → 부저 반복...
+```
+
+**After (v1.6) - 상태 기반**:
+```
+표지판 감지 (처음) → stop_sign_active = True → 부저 1회 →
+표지판 계속 감지 → 모터 정지 유지 (부저 없음) →
+표지판 사라짐 → stop_sign_active = False → 
+즉시 자율주행 재개
+```
+
+### 코드 비교
+
+**Before (v1.5)**:
+```python
+# 쿨다운 체크
+if stop_detected:
+    if current_time - last_stop_detection_time < SIGN_COOLDOWN_TIME:
+        stop_detected = False  # 무시
+```
+
+**After (v1.6)**:
+```python
+# 상태 기반 체크
+if stop_detected:
+    if not stop_sign_active:
+        # 처음 감지
+        stop_sign_active = True
+        부저 울림 (1회)
+    # 계속 감지 → 모터 정지만
+    car_stop()
+else:
+    if stop_sign_active:
+        # 사라짐 → 자율주행 재개
+        stop_sign_active = False
+```
 
 ---
 
@@ -219,45 +303,46 @@ flowchart TD
     CLEANUP --> END([프로그램 종료])
 ```
 
-### Early If 패턴 상세
+### Early If 패턴 상세 (v1.6 - 상태 기반)
 
 ```mermaid
 sequenceDiagram
     participant Main as 메인 루프
     participant Detect as 객체 감지
-    participant React as 반응 모듈
+    participant State as 상태 관리
+    participant Motor as 모터 제어
     participant AutoDrive as 자율주행
     
     Main->>Detect: detect_traffic_signs()
     Detect-->>Main: (stop, no_drive, frame, info)
     
-    alt 표지판 감지됨
-        Main->>React: react_to_detection()
-        React->>React: 반응 모드 확인
-        
-        alt 모드 0: STOP_ONLY
-            React->>React: car_stop()
-            React->>React: beep()
-            React->>React: sleep(duration)
-        else 모드 1: REVERSE
-            React->>React: car_stop()
-            React->>React: beep() x2
-            React->>React: 후진
-        else 모드 2: AVOID
-            React->>React: 위치 확인
-            React->>React: 반대 방향 회피
-        else 모드 3: IGNORE
-            React-->>Main: 무시
-        end
-        
-        React-->>Main: action
-        Note over Main: 모드 3 아니면 continue
+    alt 표지판 감지됨 (처음)
+        Main->>State: stop_sign_active = True
+        Main->>State: stop_beep_played = False
+        Main->>Main: 부저 울림 (1회, 0.1초)
+        Main->>State: stop_beep_played = True
+        Main->>Motor: car_stop()
+        Note over Main: Frame 처리는 계속 진행
+    else 표지판 계속 감지 중
+        Note over Main: stop_sign_active = True (유지)
+        Note over Main: 부저 울리지 않음
+        Main->>Motor: car_stop() (계속)
+        Note over Main: Frame 처리는 계속 진행
+    else 표지판 사라짐
+        Main->>State: stop_sign_active = False
+        Main->>State: stop_beep_played = False (리셋)
+        Note over Main: 자율주행 즉시 재개
+        Main->>AutoDrive: process_frame()
+        AutoDrive->>AutoDrive: 히스토그램 분석
+        AutoDrive->>AutoDrive: 방향 결정
+        AutoDrive-->>Main: direction
+        Main->>Motor: control_car()
     else 표지판 없음
         Main->>AutoDrive: process_frame()
         AutoDrive->>AutoDrive: 히스토그램 분석
         AutoDrive->>AutoDrive: 방향 결정
         AutoDrive-->>Main: direction
-        Main->>Main: control_car()
+        Main->>Motor: control_car()
     end
 ```
 
@@ -352,40 +437,57 @@ flowchart TB
     COMPARE --> |"기본"| DEFAULT[직진]
 ```
 
-### 4. 반응 모드 알고리즘
+### 4. 상태 기반 제어 알고리즘 (v1.6)
 
 ```mermaid
 flowchart TD
-    START[객체 감지됨] --> MODE{반응 모드?}
+    START[객체 감지] --> CHECK{stop_sign_active?}
     
-    MODE -->|0| STOP[STOP_ONLY]
-    STOP --> S1[car_stop]
-    S1 --> S2[beep 1회]
-    S2 --> S3[sleep duration]
-    S3 --> DONE[완료]
+    CHECK -->|False<br/>처음 감지| FIRST[처음 감지 처리]
+    FIRST --> F1[stop_sign_active = True]
+    F1 --> F2[stop_beep_played = False]
+    F2 --> F3{USE_BEEP?}
+    F3 -->|Yes| F4[부저 울림<br/>0.1초 1회만]
+    F3 -->|No| F5
+    F4 --> F5[stop_beep_played = True]
+    F5 --> MOTOR_STOP
     
-    MODE -->|1| REVERSE[REVERSE]
-    REVERSE --> R1[car_stop]
-    R1 --> R2[beep 2회]
-    R2 --> R3[후진 -speed]
-    R3 --> R4[sleep duration]
-    R4 --> R5[car_stop]
-    R5 --> DONE
+    CHECK -->|True<br/>계속 감지| CONT[계속 감지 처리]
+    CONT --> C1{stop_beep_played?}
+    C1 -->|True| C2[부저 울리지 않음]
+    C1 -->|False| ERROR[오류: 이미 True여야 함]
+    C2 --> MOTOR_STOP
     
-    MODE -->|2| AVOID[AVOID]
-    AVOID --> A1[car_stop]
-    A1 --> A2[beep 1회]
-    A2 --> POS{객체 위치?}
-    POS -->|LEFT| A_RIGHT[우회전]
-    POS -->|RIGHT| A_LEFT[좌회전]
-    POS -->|CENTER| A_BACK[후진 + 랜덤]
-    A_RIGHT --> A3[sleep duration]
-    A_LEFT --> A3
-    A_BACK --> A3
-    A3 --> DONE
+    MOTOR_STOP[car_stop<br/>모터 정지] --> FRAME[Frame 처리 계속]
+    FRAME --> LOOP_NEXT[다음 루프]
     
-    MODE -->|3| IGNORE[IGNORE]
-    IGNORE --> CONTINUE[계속 주행]
+    START --> NO_DETECT{표지판 없음?}
+    NO_DETECT -->|Yes & stop_sign_active=True| DISAPP[표지판 사라짐]
+    DISAPP --> D1[stop_sign_active = False]
+    D1 --> D2[stop_beep_played = False]
+    D2 --> AUTO[자율주행 즉시 재개]
+    
+    NO_DETECT -->|Yes & stop_sign_active=False| AUTO
+    AUTO --> A1[process_frame]
+    A1 --> A2[히스토그램 분석]
+    A2 --> A3[방향 결정]
+    A3 --> A4[control_car]
+```
+
+### 5. 반응 모드 (IGNORE 모드)
+
+v1.6에서는 기본적으로 **상태 기반 제어**로 작동하며, `Detect_Reaction_Mode` 트랙바가 **3 (IGNORE)**일 때만 표지판을 무시하고 계속 주행합니다.
+
+```mermaid
+flowchart TD
+    DETECT[표지판 감지] --> MODE{Reaction Mode?}
+    
+    MODE -->|0, 1, 2| STATE[상태 기반 제어]
+    STATE --> STOP[표지판 사라질 때까지<br/>모터 정지]
+    STOP --> BEEP[부저 1회만]
+    
+    MODE -->|3: IGNORE| IGNORE[무시]
+    IGNORE --> CONTINUE[자율주행 계속]
 ```
 
 ---
@@ -479,95 +581,86 @@ flowchart TB
     M3 --> A3["감지해도 계속 주행<br/>테스트용"]
 ```
 
-### 모드별 동작 비교
+### 모드별 동작 비교 (v1.6)
 
-| 모드 | 동작 | 부저 | 이동 | 사용 상황 |
-|------|------|------|------|----------|
-| **0: STOP_ONLY** | 정지 + 대기 | 1회 | 없음 | 정지 표지판 |
-| **1: REVERSE** | 정지 + 후진 | 2회 | 후진 | 진입 금지 |
-| **2: AVOID** | 정지 + 회피 | 1회 | 좌/우 | 장애물 |
-| **3: IGNORE** | 무시 | 없음 | 계속 | 테스트 |
+| 모드 | 동작 | 부저 | 정지 방식 | 사용 상황 |
+|------|------|------|-----------|----------|
+| **0: STOP_ONLY** | 표지판 사라질 때까지 정지 | 처음 1회 (0.1초) | 계속 정지 | 정지 표지판 ⭐ |
+| **1: REVERSE** | *(미사용)* | - | - | - |
+| **2: AVOID** | *(미사용)* | - | - | - |
+| **3: IGNORE** | 무시하고 계속 주행 | 없음 | 정지 안함 | 테스트/감지 확인용 |
 
-### 회피 모드 상세 (모드 2)
+**⚠️ 중요**: v1.6에서는 모드 0과 3만 실질적으로 사용됩니다.
+- **모드 0 (기본)**: 표지판이 사라질 때까지 안전하게 정지
+- **모드 3**: 표지판을 감지하지만 무시하고 계속 주행 (테스트용)
 
-```mermaid
-flowchart TD
-    START[객체 감지] --> POS{객체 위치?}
+모드 1, 2는 레거시 코드로 남아있지만, v1.6의 상태 기반 제어에서는 모드 0과 동일하게 작동합니다.
+
+### v1.6 주의사항
+
+⚠️ **중요**: v1.6에서는 `react_to_detection()` 함수가 더 이상 메인 로직에서 호출되지 않습니다.  
+대신 **상태 기반 제어**가 메인 루프에서 직접 처리됩니다.
+
+`react_to_detection()` 함수는 레거시 코드로 남아있지만, v1.6의 실제 동작은 다음과 같습니다:
+
+### v1.6 실제 동작 방식
+
+```python
+# === 모드 0, 1, 2: 상태 기반 제어 ===
+if stop_detected:
+    if not stop_sign_active:
+        # 처음 감지 → 부저 1회
+        stop_sign_active = True
+        부저 울림 (0.1초)
+        stop_beep_played = True
     
-    POS -->|LEFT| RIGHT[오른쪽으로 회피<br/>car_right]
-    POS -->|RIGHT| LEFT[왼쪽으로 회피<br/>car_left]
-    POS -->|CENTER| CENTER[중앙 객체]
+    # 계속 감지 → 모터만 정지
+    car_stop()
     
-    CENTER --> BACK[후진<br/>duration/2]
-    BACK --> RANDOM{랜덤 방향}
-    RANDOM -->|50%| R_LEFT[좌회전]
-    RANDOM -->|50%| R_RIGHT[우회전]
-    
-    RIGHT --> WAIT[duration 대기]
-    LEFT --> WAIT
-    R_LEFT --> WAIT2[duration/2 대기]
-    R_RIGHT --> WAIT2
-    
-    WAIT --> STOP[car_stop]
-    WAIT2 --> STOP
+else:
+    if stop_sign_active:
+        # 사라짐 → 자율주행 재개
+        stop_sign_active = False
+
+# 표지판 활성화 중이면 자율주행 건너뛰기
+if stop_sign_active and reaction_mode != 3:
+    continue
+
+# === 모드 3: IGNORE ===
+# 표지판을 감지하지만 무시하고 계속 주행
 ```
 
-### 소스 코드 - 반응 함수
+### react_to_detection() 함수 (레거시)
+
+**⚠️ 참고**: 이 함수는 v1.6에서 더 이상 사용되지 않습니다.
+
+<details>
+<summary>레거시 코드 보기 (v1.5 이전)</summary>
 
 ```python
 def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_speed):
-    """객체 감지 시 반응 동작 함수"""
-    reaction_time = duration / 10.0  # 0.1초 단위
+    """객체 감지 시 반응 동작 함수 (v1.5 이전)"""
+    reaction_time = duration / 10.0
+    reaction_time = max(0.1, min(reaction_time, 0.5))
     object_position = detection_info.get("object_position", "NONE")
     
-    # 모드 0: 정지만
+    if reaction_mode == 3:
+        return "IGNORE"
+    
     if reaction_mode == 0:
         car_stop()
-        beep_for_sign_detection()
-        time.sleep(reaction_time)
+        if USE_BEEP:
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(0)
+        time.sleep(0.1)
         return "STOP_ONLY"
     
-    # 모드 1: 후진
-    elif reaction_mode == 1:
-        car_stop()
-        # 부저 2회
-        for _ in range(2):
-            bot.Ctrl_BEEP_Switch(1)
-            time.sleep(0.15)
-            bot.Ctrl_BEEP_Switch(0)
-            time.sleep(0.1)
-        # 후진
-        set_motor_speeds(-down_speed, -down_speed, -down_speed, -down_speed)
-        time.sleep(reaction_time)
-        car_stop()
-        return "REVERSE"
-    
-    # 모드 2: 회피
-    elif reaction_mode == 2:
-        car_stop()
-        beep_for_sign_detection()
-        
-        if object_position == "LEFT":
-            car_right(up_speed, down_speed)  # 오른쪽으로 회피
-        elif object_position == "RIGHT":
-            car_left(down_speed, up_speed)   # 왼쪽으로 회피
-        elif object_position == "CENTER":
-            # 후진 후 랜덤 방향
-            set_motor_speeds(-down_speed, -down_speed, -down_speed, -down_speed)
-            time.sleep(reaction_time / 2)
-            if random.choice([True, False]):
-                car_left(down_speed, up_speed)
-            else:
-                car_right(up_speed, down_speed)
-        
-        time.sleep(reaction_time)
-        car_stop()
-        return "AVOID"
-    
-    # 모드 3: 무시
-    elif reaction_mode == 3:
-        return "IGNORE"
+    # 모드 1, 2는 v1.6에서 0과 동일하게 작동
+    # ...
 ```
+
+</details>
 
 ---
 
@@ -618,9 +711,19 @@ graph TD
 
 ---
 
-## 💻 소스 코드 핵심 부분
+## 💻 소스 코드 핵심 부분 (v1.6)
 
-### 1. 메인 루프 - 감지 및 반응
+### 1. 상태 변수 선언
+
+```python
+# ⭐⭐ 표지판 상태 관리 (v1.6에서 추가)
+stop_sign_active = False       # 현재 Stop sign이 감지되고 있는지 여부
+no_drive_sign_active = False   # 현재 No Drive sign이 감지되고 있는지 여부
+stop_beep_played = False       # Stop sign 부저 울렸는지 여부
+no_drive_beep_played = False   # No Drive sign 부저 울렸는지 여부
+```
+
+### 2. 메인 루프 - 상태 기반 제어 (v1.6)
 
 ```python
 # 프레임 준비
@@ -633,22 +736,91 @@ detect_frame = get_detection_frame(
     params["detect_frame_source"]
 )
 
-# 표지판 감지 (Early If)
+# 표지판 감지 (매 프레임 체크)
 stop_detected, no_drive_detected, sign_frame, detection_info = detect_traffic_signs(
     detect_frame, frame, r_weight, g_weight, b_weight, frame_source
 )
 
-# 감지 시 반응
-if stop_detected or no_drive_detected:
-    action = react_to_detection(
-        detection_info,
-        params["detect_reaction_mode"],
-        params["reaction_duration"],
-        params["motor_up_speed"],
-        params["motor_down_speed"]
-    )
-    if params["detect_reaction_mode"] != 3:  # IGNORE가 아니면
-        continue  # 자율주행 건너뛰기
+# 표지판 감지 화면 항상 표시
+cv2.imshow("5_Sign_Detection", sign_frame)
+
+# ⭐⭐⭐ 상태 기반 제어 (v1.6)
+reaction_mode = params["detect_reaction_mode"]
+
+# === Stop Sign 처리 ===
+if stop_detected:
+    # 처음 감지된 경우
+    if not stop_sign_active:
+        stop_sign_active = True
+        stop_beep_played = False  # 부저 플래그 초기화
+        
+        if DEBUG_MODE:
+            print(f"\n{'='*50}")
+            print(f"🛑 STOP sign DETECTED! Position: {detection_info['object_position']}")
+            print(f"{'='*50}")
+    
+    # 부저는 최초 1회만
+    if USE_BEEP and not stop_beep_played:
+        bot.Ctrl_BEEP_Switch(1)
+        time.sleep(0.1)
+        bot.Ctrl_BEEP_Switch(0)
+        stop_beep_played = True
+        if DEBUG_MODE:
+            print("🔊 Beep played (1 time only)")
+    
+    # 모터 정지 (표지판이 있는 동안 계속 정지)
+    car_stop()
+    
+    if DEBUG_MODE and frame_count % 30 == 0:
+        print("⏸️  Motor STOPPED (waiting for sign to disappear)")
+
+else:
+    # Stop sign이 사라진 경우
+    if stop_sign_active:
+        stop_sign_active = False
+        stop_beep_played = False
+        if DEBUG_MODE:
+            print(f"\n{'='*50}")
+            print("✅ STOP sign DISAPPEARED - Resuming auto drive")
+            print(f"{'='*50}\n")
+
+# === No Drive Sign 처리 (Stop sign과 동일) ===
+if no_drive_detected:
+    if not no_drive_sign_active:
+        no_drive_sign_active = True
+        no_drive_beep_played = False
+        if DEBUG_MODE:
+            print(f"\n{'='*50}")
+            print(f"🚫 NO DRIVE sign DETECTED! Position: {detection_info['object_position']}")
+            print(f"{'='*50}")
+    
+    if USE_BEEP and not no_drive_beep_played:
+        bot.Ctrl_BEEP_Switch(1)
+        time.sleep(0.1)
+        bot.Ctrl_BEEP_Switch(0)
+        no_drive_beep_played = True
+    
+    car_stop()
+    
+    if DEBUG_MODE and frame_count % 30 == 0:
+        print("⏸️  Motor STOPPED (waiting for sign to disappear)")
+
+else:
+    if no_drive_sign_active:
+        no_drive_sign_active = False
+        no_drive_beep_played = False
+        if DEBUG_MODE:
+            print(f"\n{'='*50}")
+            print("✅ NO DRIVE sign DISAPPEARED - Resuming auto drive")
+            print(f"{'='*50}\n")
+
+# ⭐⭐⭐ 표지판이 활성화되어 있으면 자율주행 건너뛰기 (IGNORE 모드 제외)
+if (stop_sign_active or no_drive_sign_active) and reaction_mode != 3:
+    # 다음 프레임으로 (자율주행 건너뛰기)
+    continue
+
+# 표지판 없을 경우: 정상 자율주행
+# (이하 라인 트레이싱 코드...)
 ```
 
 ### 2. 표지판 감지 함수
@@ -677,7 +849,7 @@ def detect_traffic_signs(detect_frame, display_frame, r_weight, g_weight, b_weig
 
 ---
 
-## 🔧 트러블슈팅
+## 🔧 트러블슈팅 (v1.6)
 
 ### 자주 발생하는 문제
 
@@ -686,18 +858,49 @@ def detect_traffic_signs(detect_frame, display_frame, r_weight, g_weight, b_weig
 | 표지판 미감지 | minNeighbors 높음 | 값 낮추기 (3~5) |
 | 오탐지 많음 | minNeighbors 낮음 | 값 높이기 (7~10) |
 | 빛 반사로 오감지 | B_weight 낮음 | B_weight 높이기 (60~80) |
-| 회피 방향 이상 | 위치 판단 오류 | 프레임 소스 변경 |
-| 반응 느림 | duration 높음 | Reaction_Duration 낮추기 |
+| 표지판 앞에서 멈춤 | 정상 동작 (v1.6) | 표지판 치우기 |
+| 부저가 계속 울림 | 구버전 (v1.5 이전) | v1.6으로 업데이트 |
+| Frame 처리 느림 | minSize 작음 | minSize 40~50으로 증가 |
 
-### 디버그 모드 활용
+### v1.6 특정 문제
+
+| 문제 | 원인 | 해결 방법 |
+|------|------|----------|
+| 표지판이 사라져도 안 움직임 | stop_sign_active가 True 유지 | 코드 확인: `else:` 블록 실행 확인 |
+| 부저가 안 울림 | `USE_BEEP = False` | `USE_BEEP = True`로 변경 |
+| 부저가 여러 번 울림 | 구버전 코드 | 최신 v1.6 코드 확인 |
+
+### 디버그 모드 활용 (v1.6)
 
 ```python
 DEBUG_MODE = True  # 상세 로그 출력
 
-# 출력 예시:
-# 🛑 STOP sign detected! Position: CENTER
-#    Reaction Mode: AVOID
-#    Action Performed: AVOID
+# 출력 예시 (처음 감지):
+# ==================================================
+# 🛑 STOP sign DETECTED! Position: CENTER
+# ==================================================
+# 🔊 Beep played (1 time only)
+
+# 출력 예시 (계속 감지 중, 30프레임마다):
+# ⏸️  Motor STOPPED (waiting for sign to disappear)
+
+# 출력 예시 (표지판 사라짐):
+# ==================================================
+# ✅ STOP sign DISAPPEARED - Resuming auto drive
+# ==================================================
+```
+
+### 상태 확인 방법
+
+표지판 상태를 확인하려면 디버그 메시지를 추가하세요:
+
+```python
+# 메인 루프에 추가
+if DEBUG_MODE and frame_count % 30 == 0:
+    print(f"stop_sign_active: {stop_sign_active}")
+    print(f"stop_beep_played: {stop_beep_played}")
+    print(f"no_drive_sign_active: {no_drive_sign_active}")
+    print(f"no_drive_beep_played: {no_drive_beep_played}")
 ```
 
 ### 성능 최적화
@@ -757,6 +960,51 @@ flowchart TB
 
 ---
 
-> 📝 **문서 버전**: v1.0  
-> 📅 **최종 수정**: 2025-12-08  
-> 👤 **작성**: Raspbot 개발팀
+## 📝 버전 히스토리
+
+| 버전 | 날짜 | 변경 사항 |
+|:----:|:----:|-----------|
+| **v1.6** | 2025-12-09 | ⭐ 상태 기반 제어 시스템 추가<br/>⭐ 표지판 지속 감지 (사라질 때까지 정지)<br/>⭐ 부저 1회만 울림 (소음 최소화)<br/>✅ 쿨다운 시스템 제거<br/>✅ 안전성 대폭 향상 |
+| v1.5 | 2025-12-09 | 쿨다운 시스템 (2.5초)<br/>Frame 처리 속도 개선<br/>부저 최적화 |
+| v1.4 | 2025-12-02 | RGB 가중치 필터링 추가<br/>빛 반사 제거 기능 |
+| v1.0 | 2025-11-XX | 초기 버전 |
+
+---
+
+## 🎯 권장 사용 설정 (v1.6)
+
+### 정지 표지판 테스트
+
+```python
+# 권장 설정
+Detect_Frame_Source = 0        # 원본 프레임
+Detect_Reaction_Mode = 0       # STOP_ONLY (기본)
+USE_BEEP = True                # 부저 사용
+DEBUG_MODE = True              # 디버그 메시지 확인
+```
+
+**작동 확인**:
+1. 정지 표지판을 카메라 앞에 보여주기
+2. 부저가 1회만 "삐!" 울리는지 확인
+3. 모터가 정지하는지 확인
+4. 표지판을 치우기
+5. 자율주행이 즉시 재개되는지 확인
+
+### 테스트 모드
+
+```python
+# 표지판 감지만 확인 (정지 안 함)
+Detect_Reaction_Mode = 3       # IGNORE
+```
+
+이 모드에서는 표지판을 감지하지만 모터를 정지하지 않습니다. 감지가 잘 되는지 확인할 때 사용하세요.
+
+---
+
+> 📝 **문서 버전**: v1.6  
+> 📅 **최종 수정**: 2025-12-09  
+> 👤 **작성**: Raspbot 개발팀  
+> 🔗 **관련 문서**: `CHANGELOG_v1.6_표지판_지속감지.md`
+
+
+

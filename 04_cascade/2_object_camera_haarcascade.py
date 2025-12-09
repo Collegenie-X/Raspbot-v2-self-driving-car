@@ -262,7 +262,7 @@ def draw_detection_results(frame, detected_objects, label):
 
     for idx, (x, y, w, h) in enumerate(detected_objects, 1):
         # 사각형 그리기 (녹색, 두께 3)
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 5)
 
         # 객체 위에 텍스트 그리기 (크기 정보)
         size_text = f"Size: {w}x{h}"
@@ -284,7 +284,7 @@ def draw_detection_results(frame, detected_objects, label):
             (x, y - 30),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
-            (0, 255, 0),
+            (255, 0, 0),
             2,
         )
 
@@ -295,8 +295,8 @@ def draw_detection_results(frame, detected_objects, label):
             rect_text,
             (x + 5, y + 20),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            (255, 255, 255),
+            0.8,
+            (0, 0, 255),
             1,
         )
 

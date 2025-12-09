@@ -4,7 +4,7 @@
 Raspbot v2 자율주행 + 표지판 감지 코드 (RGB 필터링 + Haar Cascade)
 서보 모터 포함 기본 라인 트레이싱 + RGB 가중치 필터링 + 표지판 감지
 
-Modified: 2025-12-02
+Modified: 2025-12-09 (v1.6 - 표지판 지속 감지)
 
 ═══════════════════════════════════════════════════════════
 주요 특징:
@@ -14,14 +14,20 @@ Modified: 2025-12-02
 - ⭐ RGB 가중치 기반 그레이스케일 변환 (빛 반사 필터링)
 - ⭐ Haar Cascade 표지판 감지 (Stop, No Drive)
 - ⭐ Early If 패턴: 표지판 먼저 체크 → 있으면 정지 → 없으면 자율주행
-- 표지판 감지 시 빨간색 윤곽선 표시 및 부저 알림 (1초 정지)
+- ⭐⭐⭐ 표지판 지속 감지: 표지판이 사라질 때까지 계속 정지 (NEW!)
+- ⭐⭐⭐ 부저 1회만: 표지판 처음 감지 시에만 부저 (NEW!)
+- ⭐⭐⭐ Frame 처리 계속: 정지 중에도 이미지 인식 계속 진행 (NEW!)
+- 표지판 감지 시 빨간색 윤곽선 표시
 - 히스토그램 3등분 분석 기반 방향 결정
 - 단계별 주석으로 실행 흐름 명확화
 
-실행 흐름 (Early If Pattern):
-1. 프레임 읽기
-2. 표지판 감지 (Stop, No Drive) ← Early If 체크
-3. 표지판 있으면: 정지 + 부저 + 1초 대기 → continue (다음 루프)
+실행 흐름 (상태 기반 제어):
+1. 프레임 읽기 및 처리 (계속 진행)
+2. 표지판 감지 (Stop, No Drive) ← 매 프레임 체크
+3. Stop sign 감지:
+   - 처음 감지: 부저 1회 울림 (0.1초)
+   - 계속 감지: 모터 정지 유지, 부저 없음
+   - 사라짐: 즉시 자율주행 재개
 4. 표지판 없으면: 라인 트레이싱 자율주행 (정상 동작)
 
 하드웨어 제어:
@@ -31,9 +37,22 @@ Modified: 2025-12-02
 - 💡 LED: bot.Ctrl_WQ2812_ALL(mode, effect)
 
 ═══════════════════════════════════════════════════════════
-주요 변경사항 (v1.4 - RGB 필터링):
+주요 변경사항:
 ═══════════════════════════════════════════════════════════
-⭐ RGB 가중치 기반 그레이스케일 변환 추가
+⭐ v1.6 (2025-12-09) - 표지판 지속 감지 (최종):
+  - 상태 기반 제어: stop_sign_active, no_drive_sign_active
+  - 표지판이 화면에서 사라질 때까지 계속 모터 정지
+  - 부저는 처음 감지 시 1회만 울림 (중복 방지)
+  - Frame 처리는 계속 진행 (이미지 인식 유지)
+  - 표지판 사라지면 즉시 자율주행 재개
+  → ✅ 안전한 정지, 빠른 프레임 처리, 부저 소음 최소화
+
+⭐ v1.5 (2025-12-09) - 반응 속도 최적화:
+  - 부저 최적화: 여러 번 울림 → 1회만 짧게 (0.1초)
+  - 프레임 처리 지연 감소: 0.05초 → 0.01초
+  → ⚡ FPS 대폭 향상
+
+⭐ v1.4 (2025-12-02) - RGB 필터링:
   - R/G/B 채널별 가중치 조정 가능
   - 도로 검정색의 빛 반사 필터링
   - 트랙바로 실시간 조정 (R_weight, G_weight, B_weight)
@@ -42,6 +61,7 @@ Modified: 2025-12-02
   - 도로 검정색 표면의 빛 반사로 인한 오검출 방지
   - RGB 채널별 가중치를 조정하여 최적의 도로선 감지
   - 환경 조명 변화에 강건한 라인 트레이싱
+  - ⭐⭐ 표지판 감지 후 빠른 자율주행 복귀 (NEW!)
 
 권장 설정:
   - 밝은 환경: R↓(30), G=중간(40), B↑(60) - 파랑 채널 강조
@@ -141,6 +161,12 @@ mouse_use = True
 led_state = False  # LED 상태
 beep_state = False  # 부저 상태
 frame_count = 0  # 프레임 카운터
+
+# ⭐⭐ 표지판 상태 관리 (개선된 방식)
+stop_sign_active = False  # 현재 Stop sign이 감지되고 있는지 여부
+no_drive_sign_active = False  # 현재 No Drive sign이 감지되고 있는지 여부
+stop_beep_played = False  # Stop sign 부저 울렸는지 여부
+no_drive_beep_played = False  # No Drive sign 부저 울렸는지 여부
 
 print("Configuration loaded successfully")
 print(
@@ -862,12 +888,12 @@ def beep_for_sign_detection():
 
 def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_speed):
     """
-    ⭐⭐ 객체 감지 시 반응 동작 함수
+    ⭐⭐ 객체 감지 시 반응 동작 함수 (반응 속도 최적화)
 
     반응 모드별 동작:
-        0 (STOP_ONLY): 정지 + 부저 + 대기
-        1 (REVERSE): 정지 + 부저 + 후진
-        2 (AVOID): 정지 + 객체 반대 방향 회피
+        0 (STOP_ONLY): 정지 + 부저 (1회) + 최소 대기
+        1 (REVERSE): 정지 + 부저 (1회) + 후진
+        2 (AVOID): 정지 + 부저 (1회) + 객체 반대 방향 회피
         3 (IGNORE): 감지해도 계속 주행
 
     Args:
@@ -880,9 +906,9 @@ def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_s
     Returns:
         str: 수행된 동작 이름
     """
-    # 반응 시간 계산 (0.1초 단위 → 초)
+    # ⭐⭐ 반응 시간 최소화 (0.1~0.5초로 제한)
     reaction_time = duration / 10.0
-    reaction_time = max(0.1, min(reaction_time, 3.0))  # 0.1초 ~ 3초 제한
+    reaction_time = max(0.1, min(reaction_time, 0.5))  # 최대 0.5초로 제한
 
     object_position = detection_info.get("object_position", "NONE")
 
@@ -895,41 +921,41 @@ def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_s
         return "IGNORE"
 
     # ============================
-    # 모드 0: 정지만 (STOP_ONLY)
+    # 모드 0: 정지만 (STOP_ONLY) - 반응 속도 최적화
     # ============================
     if reaction_mode == 0:
         if DEBUG_MODE:
-            print(f"🔴 STOP_ONLY mode - Stopping for {reaction_time:.1f}s")
+            print(f"🔴 STOP_ONLY mode - Quick stop")
 
         # 정지
         car_stop()
 
-        # 부저
+        # ⭐ 부저 1회만 짧게 (0.1초)
         if USE_BEEP:
-            beep_for_sign_detection()
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(0)
 
-        # 대기
-        time.sleep(reaction_time)
+        # ⭐ 최소 대기 (0.1초)
+        time.sleep(0.1)
 
         return "STOP_ONLY"
 
     # ============================
-    # 모드 1: 후진 (REVERSE)
+    # 모드 1: 후진 (REVERSE) - 반응 속도 최적화
     # ============================
     elif reaction_mode == 1:
         if DEBUG_MODE:
-            print(f"🟡 REVERSE mode - Backing up for {reaction_time:.1f}s")
+            print(f"🟡 REVERSE mode - Quick reverse")
 
         # 정지
         car_stop()
 
-        # 부저 (2회)
+        # ⭐ 부저 1회만 짧게 (0.1초)
         if USE_BEEP:
-            for _ in range(2):
-                bot.Ctrl_BEEP_Switch(1)
-                time.sleep(0.15)
-                bot.Ctrl_BEEP_Switch(0)
-                time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(0)
 
         # 후진 (음수 속도 = 후진)
         set_motor_speeds(-down_speed, -down_speed, -down_speed, -down_speed)
@@ -941,7 +967,7 @@ def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_s
         return "REVERSE"
 
     # ============================
-    # 모드 2: 회피 (AVOID)
+    # 모드 2: 회피 (AVOID) - 반응 속도 최적화
     # ============================
     elif reaction_mode == 2:
         if DEBUG_MODE:
@@ -950,9 +976,11 @@ def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_s
         # 정지
         car_stop()
 
-        # 부저
+        # ⭐ 부저 1회만 짧게 (0.1초)
         if USE_BEEP:
-            beep_for_sign_detection()
+            bot.Ctrl_BEEP_Switch(1)
+            time.sleep(0.1)
+            bot.Ctrl_BEEP_Switch(0)
 
         # 객체 위치에 따라 반대 방향으로 회피
         if object_position == "LEFT":
@@ -987,8 +1015,8 @@ def react_to_detection(detection_info, reaction_mode, duration, up_speed, down_s
             time.sleep(reaction_time / 2)
 
         else:
-            # 위치 불명 → 정지만
-            time.sleep(reaction_time)
+            # 위치 불명 → 최소 대기
+            time.sleep(0.1)
 
         # 정지
         car_stop()
@@ -1505,6 +1533,7 @@ beep_state = False
 
 try:
     while True:
+
         frame_count += 1
 
         # 프레임 상태 표시 (10프레임마다)
@@ -1564,45 +1593,105 @@ try:
             )
         )
 
-        # 표지판 감지 시: 선택된 반응 모드로 대응
-        if stop_detected or no_drive_detected:
-            cv2.imshow("5_Sign_Detection", sign_frame)
+        # 표지판 감지 화면 항상 표시
+        cv2.imshow("5_Sign_Detection", sign_frame)
 
-            # 디버그 메시지
-            reaction_mode = params["detect_reaction_mode"]
-            mode_names = {0: "STOP_ONLY", 1: "REVERSE", 2: "AVOID", 3: "IGNORE"}
+        # ⭐⭐⭐ 새로운 방식: 표지판이 있는 동안 계속 정지, 부저는 최초 1회만
+        reaction_mode = params["detect_reaction_mode"]
+        mode_names = {0: "STOP_ONLY", 1: "REVERSE", 2: "AVOID", 3: "IGNORE"}
 
-            if DEBUG_MODE:
-                if stop_detected:
+        # === Stop Sign 처리 ===
+        if stop_detected:
+            # 처음 감지된 경우
+            if not stop_sign_active:
+                stop_sign_active = True
+                stop_beep_played = False  # 부저 플래그 초기화
+
+                if DEBUG_MODE:
+                    print(f"\n{'='*50}")
                     print(
-                        f"🛑 STOP sign detected! Position: {detection_info['object_position']}"
+                        f"🛑 STOP sign DETECTED! Position: {detection_info['object_position']}"
                     )
-                if no_drive_detected:
                     print(
-                        f"🚫 NO DRIVE sign detected! Position: {detection_info['object_position']}"
+                        f"   Reaction Mode: {mode_names.get(reaction_mode, 'UNKNOWN')}"
                     )
-                print(f"   Reaction Mode: {mode_names.get(reaction_mode, 'UNKNOWN')}")
+                    print(f"{'='*50}")
 
-            # ⭐⭐ 선택된 반응 모드로 대응
-            action = react_to_detection(
-                detection_info,
-                reaction_mode,
-                params["reaction_duration"],
-                params["motor_up_speed"],
-                params["motor_down_speed"],
-            )
+            # 부저는 최초 1회만
+            if USE_BEEP and not stop_beep_played:
+                bot.Ctrl_BEEP_Switch(1)
+                time.sleep(0.1)
+                bot.Ctrl_BEEP_Switch(0)
+                stop_beep_played = True
+                if DEBUG_MODE:
+                    print("🔊 Beep played (1 time only)")
 
-            if DEBUG_MODE:
-                print(f"   Action Performed: {action}")
+            # 모터 정지 (표지판이 있는 동안 계속 정지)
+            car_stop()
 
+            if DEBUG_MODE and frame_count % 30 == 0:
+                print("⏸️  Motor STOPPED (waiting for sign to disappear)")
+
+        else:
+            # Stop sign이 사라진 경우
+            if stop_sign_active:
+                stop_sign_active = False
+                stop_beep_played = False
+                if DEBUG_MODE:
+                    print(f"\n{'='*50}")
+                    print("✅ STOP sign DISAPPEARED - Resuming auto drive")
+                    print(f"{'='*50}\n")
+
+        # === No Drive Sign 처리 (Stop sign과 동일) ===
+        if no_drive_detected:
+            # 처음 감지된 경우
+            if not no_drive_sign_active:
+                no_drive_sign_active = True
+                no_drive_beep_played = False
+
+                if DEBUG_MODE:
+                    print(f"\n{'='*50}")
+                    print(
+                        f"🚫 NO DRIVE sign DETECTED! Position: {detection_info['object_position']}"
+                    )
+                    print(
+                        f"   Reaction Mode: {mode_names.get(reaction_mode, 'UNKNOWN')}"
+                    )
+                    print(f"{'='*50}")
+
+            # 부저는 최초 1회만
+            if USE_BEEP and not no_drive_beep_played:
+                bot.Ctrl_BEEP_Switch(1)
+                time.sleep(0.1)
+                bot.Ctrl_BEEP_Switch(0)
+                no_drive_beep_played = True
+                if DEBUG_MODE:
+                    print("🔊 Beep played (1 time only)")
+
+            # 모터 정지 (표지판이 있는 동안 계속 정지)
+            car_stop()
+
+            if DEBUG_MODE and frame_count % 30 == 0:
+                print("⏸️  Motor STOPPED (waiting for sign to disappear)")
+
+        else:
+            # No Drive sign이 사라진 경우
+            if no_drive_sign_active:
+                no_drive_sign_active = False
+                no_drive_beep_played = False
+                if DEBUG_MODE:
+                    print(f"\n{'='*50}")
+                    print("✅ NO DRIVE sign DISAPPEARED - Resuming auto drive")
+                    print(f"{'='*50}\n")
+
+        # ⭐⭐⭐ 표지판이 활성화되어 있으면 자율주행 건너뛰기 (IGNORE 모드 제외)
+        if (stop_sign_active or no_drive_sign_active) and reaction_mode != 3:
             # 키 입력 처리 (표지판 감지 중에도 종료 가능)
             result = handle_keyboard_input()
             if result == "EXIT":
                 break
-
-            # 무시 모드가 아니면 다음 루프로 (자율주행 건너뛰기)
-            if reaction_mode != 3:
-                continue
+            # 다음 프레임으로 (자율주행 건너뛰기)
+            continue
 
         # ⭐ 표지판 없을 경우: 정상 자율주행
         # RGB 가중치 적용하여 프레임 처리
@@ -1656,7 +1745,8 @@ try:
         if result == "EXIT":
             break
 
-        time.sleep(0.05)
+        # ⭐⭐ 프레임 처리 지연 최소화 (0.05 → 0.01초)
+        time.sleep(0.01)
 
 except KeyboardInterrupt:
     print("\nInterrupted by user")

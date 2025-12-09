@@ -33,9 +33,9 @@ flowchart LR
     A[0단계<br/>기본 카메라] --> B[1단계<br/>가중치 변환]
     B --> C[2단계<br/>객체 감지]
     
-    style A fill:#e1f5fe
-    style B fill:#fff3e0
-    style C fill:#e8f5e9
+    style A fill:#e1f5fe,color:#111
+    style B fill:#fff3e0,color:#111
+    style C fill:#e8f5e9,color:#111
 ```
 
 ---
@@ -175,12 +175,25 @@ def detect_objects(cascade, gray_image):
     """
     Haar Cascade를 사용하여 객체를 감지합니다.
     """
+    # detectMultiScale는 (x, y, w, h) 튜플의 numpy 배열(np.ndarray)을 반환합니다.
+    # 각 튜플은 감지된 객체의 좌상단 좌표(x, y)와 너비(w), 높이(h)를 의미합니다.
     objects = cascade.detectMultiScale(
         gray_image,
         scaleFactor=SCALE_FACTOR,      # 1.1
         minNeighbors=MIN_NEIGHBORS,    # 5
         minSize=MIN_SIZE,              # (30, 30)
     )
+    # 예시: 2개 감지 시, 결과는 np.array([[100, 50, 30, 30], [200, 80, 40, 40]])
+    # 즉, objects[0]: x=100, y=50, w=30, h=30 / objects[1]: x=200, y=80, w=40, h=40
+
+    # 일반적으로 아래처럼 각 객체 박스를 그리거나, 후처리/출력에 활용합니다:
+    for (x, y, w, h) in objects:
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)   # 화면에 사각형 표시
+        # 필요에 따라 여기서 감지된 영역만 crop하거나, ROI 추가 분석도 가능
+
+    # "감지 소스"는 gray_image(그레이스케일), 또는 입력이미지(frame)을 선택적으로 적용  
+    # 예시: detectMultiScale의 첫 번째 인자만 변경
+    # objects = cascade.detectMultiScale(frame, ...)   # 컬러 입력 사용 (보통은 gray가 성능 우수)
     return objects
 ```
 

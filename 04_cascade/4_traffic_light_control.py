@@ -321,6 +321,9 @@ cv2.createTrackbar("G_weight", "Camera Settings", DEFAULT_G_WEIGHT, 100, nothing
 cv2.createTrackbar("B_weight", "Camera Settings", DEFAULT_B_WEIGHT, 100, nothing)
 
 # 신호등 감지 프레임 선택 트랙바
+# 0: frame (원본 BGR)            -> 내부에서 OpenCV 기본 GRAY 변환 후 감지
+# 1: gray_frame (일반 그레이)     -> cv2.cvtColor(frame, BGR2GRAY)
+# 2: gray_rgb_frame (RGB 강조 그레이) -> weighted_gray(frame, R/G/B 가중치)
 cv2.createTrackbar("Detect_Frame_Source", "Camera Settings", 0, 2, nothing)
 
 print("Trackbars and windows configured successfully")
@@ -470,10 +473,23 @@ def detect_road_lines(color_frame, gray_frame, detect_value):
 
 
 def visualize_direction_on_frame(
-    binary_frame, direction, left_sum, center_sum, right_sum, rgb_weights
+    binary_frame,
+    direction,
+    left_sum,
+    center_sum,
+    right_sum,
+    rgb_weights,
+    traffic_light_stop=False,
 ):
     """
-    프레임에 방향 정보 시각화 (3등분 방식)
+    프레임에 방향 정보 시각화 (3등분 방식 + 신호등 상태)
+
+    Args:
+        binary_frame: 이진화된 프레임
+        direction: 결정된 방향
+        left_sum, center_sum, right_sum: 히스토그램 합
+        rgb_weights: RGB 가중치 튜플
+        traffic_light_stop: 신호등으로 인한 정지 상태 여부 (NEW)
     """
     # 컬러 이미지로 변환
     frame_color = cv2.cvtColor(binary_frame, cv2.COLOR_GRAY2BGR)
@@ -484,15 +500,24 @@ def visualize_direction_on_frame(
     cv2.rectangle(overlay, (0, 0), (w, 110), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.7, frame_color, 0.3, 0, frame_color)
 
-    # 방향 텍스트 표시
-    direction_text = f"DIR: {direction}"
-    direction_color = (0, 255, 0) if direction == "UP" else (0, 255, 255)
+    # ⭐ 신호등 정지 상태일 때 "STOP" 표시
+    if traffic_light_stop:
+        direction_text = "STOP (RED LIGHT)"
+        direction_color = (0, 0, 255)  # 빨간색
+        # 배경 강조
+        cv2.rectangle(overlay, (0, 0), (w, 40), (0, 0, 128), -1)
+        cv2.addWeighted(overlay, 0.8, frame_color, 0.2, 0, frame_color)
+    else:
+        # 정상 자율주행 상태
+        direction_text = f"AUTO: {direction}"
+        direction_color = (0, 255, 0) if direction == "UP" else (0, 255, 255)
+
     cv2.putText(
         frame_color,
         direction_text,
         (10, 30),
         cv2.FONT_HERSHEY_SIMPLEX,
-        1.0,
+        0.8,
         direction_color,
         2,
     )
@@ -586,7 +611,9 @@ def process_frame(
     frame, detect_value, roi_top_y, roi_bottom_y, r_weight, g_weight, b_weight
 ):
     """
-    프레임 처리 및 도로선 검출
+    프레임 처리 및 도로선 검출 (자율주행용)
+
+    주의: ROI/원근 변환은 자율주행 시에만 필요하므로 여기서만 수행
     """
     # 실제 해상도 확인 및 ROI 계산
     actual_h, actual_w = frame.shape[:2]
@@ -612,7 +639,7 @@ def process_frame(
     binary_frame = detect_road_lines(frame_transformed, gray_frame, detect_value)
     cv2.imshow("4_Processed Frame", binary_frame)
 
-    return binary_frame, frame_transformed, gray_frame
+    return binary_frame
 
 
 print("Image processing functions defined successfully\n")
@@ -641,16 +668,24 @@ def detect_traffic_lights(
         detect_frame: 감지에 사용할 프레임
         display_frame: 결과 표시용 프레임
         r_weight, g_weight, b_weight: RGB 가중치
-        frame_source: 프레임 소스 (0=원본, 1=변환, 2=그레이)
+        frame_source: 프레임 소스
+            - 0: frame (원본 BGR) -> OpenCV 기본 GRAY 변환 후 감지
+            - 1: gray_frame (일반 그레이) -> 그대로 감지
+            - 2: gray_rgb_frame (RGB 강조 그레이) -> 그대로 감지
 
     Returns:
         tuple: (red_detected, green_detected, annotated_frame, detection_info)
     """
-    # 감지용 그레이스케일 변환
+    # 감지용 그레이스케일 준비
+    # - frame_source=0: 원본(BGR) → OpenCV 기본 그레이 변환
+    # - frame_source=1: 일반 그레이 → 그대로 사용 (메인 루프에서 이미 변환됨)
+    # - frame_source=2: RGB 가중치 그레이 → 그대로 사용 (메인 루프에서 이미 변환됨)
     if len(detect_frame.shape) == 2:
+        # 이미 그레이스케일 (frame_source=1 또는 2)
         gray_frame = detect_frame
     else:
-        gray_frame = weighted_gray(detect_frame, r_weight, g_weight, b_weight)
+        # 컬러 프레임 (frame_source=0) → OpenCV 기본 그레이 변환
+        gray_frame = cv2.cvtColor(detect_frame, cv2.COLOR_BGR2GRAY)
 
     # 빨간불 감지
     red_lights = red_light_cascade.detectMultiScale(
@@ -666,11 +701,18 @@ def detect_traffic_lights(
     green_detected = len(green_lights) > 0
 
     # 프레임에 감지 결과 그리기
-    annotated_frame = display_frame.copy()
+    # ⭐ 그레이스케일이면 컬러로 변환 (박스와 텍스트를 컬러로 그리기 위해)
+    if len(display_frame.shape) == 2:
+        # 그레이스케일 → BGR 컬러 변환
+        annotated_frame = cv2.cvtColor(display_frame, cv2.COLOR_GRAY2BGR)
+    else:
+        # 이미 컬러 프레임
+        annotated_frame = display_frame.copy()
+
     h, w = annotated_frame.shape[:2]
 
     # 프레임 소스 정보 표시
-    source_names = {0: "Original", 1: "Transformed", 2: "Grayscale"}
+    source_names = {0: "Original(BGR->GRAY)", 1: "Gray", 2: "Gray(RGB Weighted)"}
     source_text = f"Detect Source: {source_names.get(frame_source, 'Unknown')}"
     cv2.putText(
         annotated_frame,
@@ -760,23 +802,32 @@ def detect_traffic_lights(
     return red_detected, green_detected, annotated_frame, detection_info
 
 
-def get_detection_frame(frame, frame_transformed, gray_frame, frame_source):
+def get_detection_frame(frame, gray_frame, gray_rgb_frame, frame_source):
     """
     트랙바로 선택된 프레임 소스 반환
 
+    Args:
+        frame: 원본 프레임 (컬러)
+        gray_frame: 일반 그레이 프레임
+        gray_rgb_frame: RGB 강조(가중치) 그레이 프레임
+        frame_source: 선택된 소스 (0, 1, 2)
+
+    Returns:
+        선택된 프레임
+
     프레임 소스:
-        0: 원본 frame (컬러)
-        1: frame_transformed (원근 변환)
-        2: gray_frame (그레이스케일)
+        0: frame (원본 BGR) - 전체 화면에서 감지 (내부에서 기본 GRAY 변환)
+        1: gray_frame (일반 그레이) - 전체 화면에서 감지
+        2: gray_rgb_frame (RGB 강조 그레이) - 전체 화면에서 감지
     """
     if frame_source == 0:
         return frame
     elif frame_source == 1:
-        return frame_transformed
-    elif frame_source == 2:
         return gray_frame
+    elif frame_source == 2:
+        return gray_rgb_frame
     else:
-        return frame
+        return frame  # 기본값
 
 
 print("Traffic Light detection functions defined successfully\n")
@@ -968,7 +1019,7 @@ def decide_direction(
     if center_ratio < CENTER_CLEAR_THRESHOLD:
         if DEBUG_MODE:
             print(f"  Center is CLEAR (ratio: {center_ratio:.3f})")
-            print("Decision: Go STRAIGHT")
+            print("Decision: Go STRAIGHT (AUTO DRIVE)")
 
         return "UP", left_sum, center_sum, right_sum
 
@@ -1001,9 +1052,9 @@ def decide_direction(
 
         return random_direction, left_sum, center_sum, right_sum
 
-    # 직진 (기본값)
+    # 직진 (기본값) - 자율주행 계속
     if DEBUG_MODE:
-        print("Decision: Go straight (default)")
+        print("Decision: Go straight (AUTO DRIVE)")
 
     return "UP", left_sum, center_sum, right_sum
 
@@ -1199,27 +1250,27 @@ try:
         rotate_servo(1, params["servo_1_angle"])
         rotate_servo(2, params["servo_2_angle"])
 
-        # 프레임 처리 (계속 진행 - 신호등 감지 중에도)
-        binary_frame, frame_transformed, gray_frame = process_frame(
-            frame,
-            params["detect_value"],
-            params["roi_top_y"],
-            params["roi_bottom_y"],
-            params["r_weight"],
-            params["g_weight"],
-            params["b_weight"],
+        # ✅ 신호등 감지용 3가지 프레임 생성 (성능 비교 테스트용)
+        # 주의: ROI/원근 변환은 자율주행 시에만 필요하므로 process_frame() 내부에서 수행
+        # 1) frame: 원본(BGR)
+        # 2) gray_frame: OpenCV 기본 그레이
+        # 3) gray_rgb_frame: RGB 가중치 기반 그레이(빛 반사 필터링 실험)
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray_rgb_frame = weighted_gray(
+            frame, params["r_weight"], params["g_weight"], params["b_weight"]
         )
 
         # 트랙바에서 선택된 프레임 소스 가져오기
         detect_frame = get_detection_frame(
-            frame, frame_transformed, gray_frame, params["detect_frame_source"]
+            frame, gray_frame, gray_rgb_frame, params["detect_frame_source"]
         )
 
         # ⭐ 신호등 감지 (매 프레임 체크)
+        # ⭐ display_frame도 선택된 소스로 표시 (트랙바에 따라 변경)
         red_detected, green_detected, traffic_frame, detection_info = (
             detect_traffic_lights(
-                detect_frame,
-                frame,
+                detect_frame,  # 감지용 프레임
+                detect_frame,  # ⭐ 표시용 프레임도 선택된 소스 사용
                 params["r_weight"],
                 params["g_weight"],
                 params["b_weight"],
@@ -1303,25 +1354,22 @@ try:
                     print("   ⭐ RED sign disappeared, but STOP state persists")
 
         # ═══════════════════════════════════════════════════════════
-        # 자율주행 제어 (정지 상태가 아닐 때만)
+        # 자율주행 제어 - 프레임 처리는 항상, 모터만 조건부
         # ═══════════════════════════════════════════════════════════
 
-        if waiting_for_green:
-            # 정지 상태: 모터 정지, 이미지 인식은 계속
-            # ⭐ GREEN sign 감지까지 이 상태 유지
-
-            # 키 입력 처리 (정지 상태에도 종료 가능)
-            result = handle_keyboard_input()
-            if result == "EXIT":
-                break
-
-            # 다음 프레임으로 (자율주행 건너뛰기)
-            continue
-
-        # ⭐ 신호등 없을 경우: 정상 자율주행
+        # ⭐⭐⭐ 프레임 처리는 항상 실행 (신호등 감지 중에도 카메라 작동 확인용)
+        binary_frame = process_frame(
+            frame,
+            params["detect_value"],
+            params["roi_top_y"],
+            params["roi_bottom_y"],
+            params["r_weight"],
+            params["g_weight"],
+            params["b_weight"],
+        )
         histogram = np.sum(binary_frame, axis=0)
 
-        # 방향 결정
+        # 방향 결정 및 디버깅 정보
         if DEBUG_MODE and frame_count % 10 == 0:
             print(f"\n--- Frame {frame_count} ---")
             print(
@@ -1337,15 +1385,30 @@ try:
             params["roi_bottom_y"],
         )
 
-        # 방향 정보 시각화
+        # 방향 정보 시각화 (RGB 가중치 포함 + 신호등 상태)
         rgb_weights = (params["r_weight"], params["g_weight"], params["b_weight"])
         processed_frame_visual = visualize_direction_on_frame(
-            binary_frame, direction, hist_left, hist_center, hist_right, rgb_weights
+            binary_frame,
+            direction,
+            hist_left,
+            hist_center,
+            hist_right,
+            rgb_weights,
+            traffic_light_stop=waiting_for_green,  # ⭐ 신호등 정지 상태 전달
         )
         cv2.imshow("4_Processed Frame", processed_frame_visual)
 
-        # 차량 제어 (신호등 없을 경우에만)
-        control_car(direction, params["motor_up_speed"], params["motor_down_speed"])
+        # ⭐⭐⭐ 차량 제어는 신호등 없을 때만 실행
+        # 신호등이 감지되면 모터만 정지, 프레임 표시는 계속
+        if waiting_for_green:
+            # 정지 상태: 모터 제어 건너뛰기
+            if DEBUG_MODE and frame_count % 30 == 0:
+                print(
+                    f"⏸️  Motor control SKIPPED (waiting for GREEN, but frames displayed)"
+                )
+        else:
+            # 정상 자율주행: 모터 제어 실행
+            control_car(direction, params["motor_up_speed"], params["motor_down_speed"])
 
         # FPS 계산
         if frame_count % 10 == 0:

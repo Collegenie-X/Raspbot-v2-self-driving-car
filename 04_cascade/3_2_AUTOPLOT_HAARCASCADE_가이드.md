@@ -35,7 +35,7 @@
 | **Haar Cascade 감지** | Stop/No Drive 표지판 실시간 감지 | ✅ 매 프레임 체크 |
 | **⭐ 상태 기반 제어** | 표지판이 사라질 때까지 계속 정지 | ✅ NEW! |
 | **⭐ 부저 1회만** | 표지판 처음 감지 시에만 부저 울림 | ✅ NEW! |
-| **다중 프레임 소스** | 원본/변환/그레이 중 감지 소스 선택 | - |
+| **다중 프레임 소스** | 원본BGR/일반그레이/RGB가중치그레이 중 선택 | ⭐ v1.7 재설계 |
 | **다양한 반응 모드** | 정지/후진/회피/무시 선택 가능 | - |
 | **Early If 패턴** | 표지판 먼저 확인 → 없으면 자율주행 | ✅ 개선 |
 
@@ -514,7 +514,7 @@ flowchart TD
 | **RGB** | R_weight | 0~100 | 30 | Red 가중치 |
 | | G_weight | 0~100 | 40 | Green 가중치 |
 | | B_weight | 0~100 | 60 | Blue 가중치 |
-| **⭐감지** | Detect_Frame_Source | 0~2 | 0 | 감지 프레임 소스 |
+| **⭐감지** | Detect_Frame_Source | 0~2 | 0 | 감지 프레임 소스 (0=원본BGR, 1=일반그레이, 2=RGB가중치그레이) |
 | | Detect_Reaction_Mode | 0~3 | 0 | 반응 모드 |
 | | Reaction_Duration | 1~30 | 10 | 반응 시간 (×0.1초) |
 
@@ -524,41 +524,73 @@ flowchart TD
 
 ### Detect_Frame_Source 트랙바
 
+⚠️ **v1.7 업데이트 (2025-12-15)**: 프레임 소스가 **Haar Cascade 성능 비교 테스트**를 위해 재설계되었습니다.
+
 ```mermaid
 flowchart LR
     subgraph 소스선택["프레임 소스 (0~2)"]
-        S0["0: Original<br/>(원본 컬러)"]
-        S1["1: Transformed<br/>(원근 변환)"]
-        S2["2: Grayscale<br/>(그레이스케일)"]
+        S0["0: Original BGR<br/>(원본 컬러)"]
+        S1["1: Gray<br/>(일반 그레이스케일)"]
+        S2["2: Gray RGB Weighted<br/>(RGB 가중치 그레이)"]
     end
     
-    S0 --> |"전체 화면"| D0[넓은 범위 감지<br/>표지판 전체 보임]
-    S1 --> |"ROI 영역"| D1[도로 근처 감지<br/>근거리 집중]
-    S2 --> |"전처리됨"| D2[노이즈 감소<br/>빛 반사 제거]
+    S0 --> |"OpenCV 기본 변환"| D0[cv2.cvtColor<br/>BGR2GRAY]
+    S1 --> |"일반 변환"| D1[cv2.cvtColor<br/>BGR2GRAY<br/>메인 루프에서 생성]
+    S2 --> |"가중치 변환"| D2[weighted_gray<br/>R/G/B 가중치<br/>빛 반사 필터링]
 ```
 
-### 소스별 특징 비교
+### 소스별 특징 비교 (v1.7)
 
-| 소스 | 장점 | 단점 | 권장 상황 |
-|------|------|------|----------|
-| **0: Original** | 전체 화면 감지, 원거리 표지판 | 처리 부하 높음 | 표지판이 화면 전체에 나타날 때 |
-| **1: Transformed** | ROI 집중, 근거리 정확 | 좁은 범위 | 도로 근처 표지판 |
-| **2: Grayscale** | 노이즈 감소, 빛 반사 제거 | 색상 정보 손실 | 빛 반사가 심한 환경 |
+| 소스 | 그레이 변환 방식 | 특징 | 권장 상황 |
+|------|-----------------|------|----------|
+| **0: Original BGR** | detect_traffic_signs() 내부에서<br/>OpenCV 기본 변환 | 기준 성능 측정용 | 표준 성능 비교 |
+| **1: Gray (일반)** | 메인 루프에서<br/>cv2.cvtColor() | 일반 그레이스케일 | 일반 환경 |
+| **2: Gray (RGB 가중치)** | 메인 루프에서<br/>weighted_gray() | 빛 반사 필터링<br/>R/G/B 가중치 조정 | 빛 반사 심한 환경 |
 
-### 소스 코드
+### 🎯 핵심 차이점
+
+**모든 소스는 원본 전체 화면(ROI 없음)에서 감지합니다.**  
+차이점은 **그레이스케일 변환 방식**입니다:
 
 ```python
-def get_detection_frame(frame, frame_transformed, gray_frame, frame_source):
+# 메인 루프에서 3가지 프레임 생성
+gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)           # 일반 그레이
+gray_rgb_frame = weighted_gray(frame, R, G, B)                 # RGB 가중치 그레이
+
+# 트랙바로 선택
+detect_frame = get_detection_frame(
+    frame,           # 0: 원본 BGR → 감지 함수 내부에서 그레이 변환
+    gray_frame,      # 1: 일반 그레이 → 그대로 사용
+    gray_rgb_frame,  # 2: RGB 가중치 그레이 → 그대로 사용
+    frame_source
+)
+```
+
+### 소스 코드 (v1.7)
+
+```python
+def get_detection_frame(frame, gray_frame, gray_rgb_frame, frame_source):
     """트랙바로 선택된 프레임 소스 반환"""
     if frame_source == 0:
-        return frame              # 원본 (컬러)
+        return frame           # 원본 BGR (감지 함수에서 그레이 변환)
     elif frame_source == 1:
-        return frame_transformed  # 원근 변환
+        return gray_frame      # 일반 그레이스케일
     elif frame_source == 2:
-        return gray_frame         # 그레이스케일
+        return gray_rgb_frame  # RGB 가중치 그레이스케일
     else:
         return frame  # 기본값
 ```
+
+### 성능 비교 테스트 방법
+
+1. **Mode 0 (기준)**: 트랙바 = 0 → 표지판 감지 확인
+2. **Mode 1 (일반)**: 트랙바 = 1 → 표지판 감지 확인
+3. **Mode 2 (RGB)**: 트랙바 = 2 → R/G/B 가중치 조정하며 테스트
+
+**평가 기준**:
+- 감지 정확도 (오탐/미탐)
+- 감지 거리
+- 빛 반사 환경에서의 성능
 
 ---
 
@@ -703,7 +735,7 @@ graph TD
 | 함수명 | 역할 | 입력 | 출력 |
 |--------|------|------|------|
 | `detect_traffic_signs()` | 표지판 감지 | 프레임, RGB 가중치 | 감지 여부, 위치 정보 |
-| `get_detection_frame()` | 감지 소스 선택 | 3종 프레임, 소스 번호 | 선택된 프레임 |
+| `get_detection_frame()` | 감지 소스 선택 | 원본/일반그레이/RGB그레이, 소스 번호 | 선택된 프레임 |
 | `react_to_detection()` | 감지 반응 | 감지 정보, 모드 | 수행된 동작 |
 | `weighted_gray()` | RGB 그레이스케일 | 이미지, 가중치 | 그레이 이미지 |
 | `decide_direction()` | 방향 결정 | 히스토그램 | 방향 (LEFT/UP/RIGHT) |
@@ -723,16 +755,17 @@ stop_beep_played = False       # Stop sign 부저 울렸는지 여부
 no_drive_beep_played = False   # No Drive sign 부저 울렸는지 여부
 ```
 
-### 2. 메인 루프 - 상태 기반 제어 (v1.6)
+### 2. 메인 루프 - 상태 기반 제어 (v1.7)
 
 ```python
-# 프레임 준비
-frame_transformed = apply_perspective_transform(frame, pts_src)
-gray_frame = weighted_gray(frame, r_weight, g_weight, b_weight)
+# ⭐ 표지판 감지용 3가지 프레임 생성 (성능 비교 테스트용)
+# 주의: ROI/원근 변환은 자율주행 시에만 필요하므로 process_frame() 내부에서 수행
+gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+gray_rgb_frame = weighted_gray(frame, r_weight, g_weight, b_weight)
 
-# 감지 소스 선택
+# 감지 소스 선택 (0=원본BGR, 1=일반그레이, 2=RGB가중치그레이)
 detect_frame = get_detection_frame(
-    frame, frame_transformed, gray_frame, 
+    frame, gray_frame, gray_rgb_frame,
     params["detect_frame_source"]
 )
 
@@ -823,15 +856,20 @@ if (stop_sign_active or no_drive_sign_active) and reaction_mode != 3:
 # (이하 라인 트레이싱 코드...)
 ```
 
-### 2. 표지판 감지 함수
+### 3. 표지판 감지 함수 (v1.7)
 
 ```python
 def detect_traffic_signs(detect_frame, display_frame, r_weight, g_weight, b_weight, frame_source=0):
-    # 그레이스케일 변환
+    # 감지용 그레이스케일 준비
+    # - frame_source=0: 원본(BGR) → OpenCV 기본 그레이 변환
+    # - frame_source=1: 일반 그레이 → 그대로 사용 (메인 루프에서 이미 변환됨)
+    # - frame_source=2: RGB 가중치 그레이 → 그대로 사용 (메인 루프에서 이미 변환됨)
     if len(detect_frame.shape) == 2:
+        # 이미 그레이스케일 (frame_source=1 또는 2)
         gray_frame = detect_frame
     else:
-        gray_frame = weighted_gray(detect_frame, r_weight, g_weight, b_weight)
+        # 컬러 프레임 (frame_source=0) → OpenCV 기본 그레이 변환
+        gray_frame = cv2.cvtColor(detect_frame, cv2.COLOR_BGR2GRAY)
     
     # Haar Cascade 감지
     stop_signs = stop_cascade.detectMultiScale(
@@ -908,29 +946,61 @@ if DEBUG_MODE and frame_count % 30 == 0:
 ```mermaid
 flowchart TB
     A[성능 문제] --> B{FPS 낮음?}
-    B -->|Yes| C[Detect_Frame_Source = 1<br/>변환 프레임 사용]
-    B -->|Yes| D[minSize 크게 40~50]
+    B -->|Yes| C[minSize 크게 40~50]
+    B -->|Yes| D[ROI 처리 최소화<br/>자율주행만 수행]
     
     A --> E{감지 불안정?}
     E -->|Yes| F[minNeighbors 높이기]
-    E -->|Yes| G[RGB 가중치 조정]
+    E -->|Yes| G[Detect_Frame_Source 변경<br/>0→1→2 테스트]
+    E -->|Yes| H[RGB 가중치 조정<br/>빛 반사 환경]
     
-    A --> H{반응 느림?}
-    H -->|Yes| I[Reaction_Duration 낮추기]
-    H -->|Yes| J[모터 속도 높이기]
+    A --> I{반응 느림?}
+    I -->|Yes| J[Reaction_Duration 낮추기]
+    I -->|Yes| K[모터 속도 높이기]
 ```
 
 ---
 
 ## 🎓 실습 과제
 
-### 과제 1: 최적 설정 찾기
-- 다양한 조명 환경에서 RGB 가중치 최적화
-- 각 환경별 설정값 기록
+### 과제 1: Haar Cascade 성능 비교 테스트 (NEW v1.7)
+**목표**: 3가지 프레임 소스의 성능을 정량적으로 비교
 
-### 과제 2: 새로운 반응 모드 추가
-- 모드 4: 추적 (객체 방향으로 이동)
-- react_to_detection() 함수 확장
+**실험 방법**:
+1. 동일한 표지판을 동일한 거리/각도에서 테스트
+2. Detect_Frame_Source 트랙바를 0, 1, 2로 변경하며 테스트
+3. 각 모드별 감지 거리, 정확도, FPS 기록
+
+**측정 항목**:
+- 감지 성공 여부 (O/X)
+- 감지 거리 (cm)
+- FPS (초당 프레임)
+- 오탐/미탐 횟수
+
+**실험 환경**:
+- 밝은 환경 (빛 반사 있음)
+- 어두운 환경
+- 중간 조명
+
+**결과 기록표**:
+| 환경 | 소스 | 감지 거리 | FPS | 오탐 | 미탐 | 비고 |
+|------|------|-----------|-----|------|------|------|
+| 밝음 | 0 | | | | | |
+| 밝음 | 1 | | | | | |
+| 밝음 | 2 | | | | | |
+| ... | | | | | | |
+
+### 과제 2: RGB 가중치 최적화
+**목표**: Mode 2 (RGB 가중치)에서 빛 반사 환경의 최적 가중치 찾기
+
+**실험 방법**:
+1. Detect_Frame_Source = 2로 설정
+2. R_weight, G_weight, B_weight를 다양하게 조합
+3. 빛 반사가 심한 환경에서 테스트
+
+**가설**:
+- B 가중치가 높을수록 빛 반사 필터링 효과 증가
+- R 가중치가 높을수록 명암 대비 증가
 
 ### 과제 3: 다중 Cascade 적용
 - 새로운 표지판 XML 학습
@@ -964,6 +1034,7 @@ flowchart TB
 
 | 버전 | 날짜 | 변경 사항 |
 |:----:|:----:|-----------|
+| **v1.7** | 2025-12-15 | ⭐ 프레임 소스 재설계 (성능 비교 테스트)<br/>⭐ ROI 처리 최적화 (자율주행 시에만 수행)<br/>✅ 0=원본BGR, 1=일반그레이, 2=RGB가중치그레이<br/>✅ 성능 향상 및 코드 단순화 |
 | **v1.6** | 2025-12-09 | ⭐ 상태 기반 제어 시스템 추가<br/>⭐ 표지판 지속 감지 (사라질 때까지 정지)<br/>⭐ 부저 1회만 울림 (소음 최소화)<br/>✅ 쿨다운 시스템 제거<br/>✅ 안전성 대폭 향상 |
 | v1.5 | 2025-12-09 | 쿨다운 시스템 (2.5초)<br/>Frame 처리 속도 개선<br/>부저 최적화 |
 | v1.4 | 2025-12-02 | RGB 가중치 필터링 추가<br/>빛 반사 제거 기능 |
@@ -971,16 +1042,32 @@ flowchart TB
 
 ---
 
-## 🎯 권장 사용 설정 (v1.6)
+## 🎯 권장 사용 설정 (v1.7)
 
 ### 정지 표지판 테스트
 
 ```python
 # 권장 설정
-Detect_Frame_Source = 0        # 원본 프레임
+Detect_Frame_Source = 0        # 원본 BGR (기준 성능)
 Detect_Reaction_Mode = 0       # STOP_ONLY (기본)
 USE_BEEP = True                # 부저 사용
 DEBUG_MODE = True              # 디버그 메시지 확인
+```
+
+### 성능 비교 테스트
+
+```python
+# Mode 0: 기준 성능
+Detect_Frame_Source = 0        # OpenCV 기본 그레이 변환
+
+# Mode 1: 일반 그레이
+Detect_Frame_Source = 1        # 일반 그레이스케일
+
+# Mode 2: RGB 가중치 (빛 반사 환경)
+Detect_Frame_Source = 2        # RGB 가중치 그레이
+R_weight = 30                  # 실험적으로 조정
+G_weight = 40
+B_weight = 60-80               # 빛 반사 필터링
 ```
 
 **작동 확인**:
@@ -1001,10 +1088,10 @@ Detect_Reaction_Mode = 3       # IGNORE
 
 ---
 
-> 📝 **문서 버전**: v1.6  
-> 📅 **최종 수정**: 2025-12-09  
+> 📝 **문서 버전**: v1.7  
+> 📅 **최종 수정**: 2025-12-15  
 > 👤 **작성**: Raspbot 개발팀  
-> 🔗 **관련 문서**: `CHANGELOG_v1.6_표지판_지속감지.md`
+> 🔗 **관련 문서**: `CHANGELOG_v1.6_표지판_지속감지.md`, `CHANGELOG_v1.7_프레임소스_최적화.md`
 
 
 

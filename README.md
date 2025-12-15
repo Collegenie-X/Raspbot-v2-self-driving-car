@@ -116,7 +116,8 @@ Raspbot-v2-self-driving-car/
 | **[SOURCE_CODE_GUIDE.md](./docs/SOURCE_CODE_GUIDE.md)** | 전체 코드 구조, 상세 수정 가이드 | 개발자 |
 | **[CAMERA_SETUP.md](./docs/CAMERA_SETUP.md)** | Pi Camera & USB 카메라 설정 및 문제 해결 | 모든 사용자 |
 | **[MIGRATION_GUIDE.md](./docs/MIGRATION_GUIDE.md)** | YB_Pcb_Car → Raspbot_Lib 전환 가이드 | 기존 사용자 |
-| **[AUTOSTART_GUIDE.md](./docs/AUTOSTART_GUIDE.md)** | 부팅 시 자동 실행 설정 | 배포자 |
+| **[AUTOSTART_GUIDE.md](./docs/AUTOSTART_GUIDE.md)** | 부팅 시 자동 실행 설정 (단계별 상세 가이드) | 배포자 |
+| **[서비스_빠른_제어.md](./docs/서비스_빠른_제어.md)** | 서비스 찾기/종료/제어 빠른 참조 | 모든 사용자 |
 
 ### 📖 [docs/README.md](./docs/README.md)
 문서 구조와 읽는 순서에 대한 상세 가이드

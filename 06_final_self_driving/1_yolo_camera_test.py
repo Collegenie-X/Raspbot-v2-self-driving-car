@@ -68,13 +68,26 @@ try:
 
         # Generate timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Save frame as JPEG
+        # ----- 프레임 저장 및 객체 탐지 단계 -----
+        # 1. 현재 카메라 프레임을 임시 파일(yolo_temp.jpg)로 저장합니다.
+        #    이 작업은 YOLO 모델이 이미지 파일 경로를 입력받는 형태이기 때문에 필요합니다.
         temp_path = "./tmp/yolo_temp.jpg"
         cv2.imwrite(temp_path, frame)
 
-        # Run YOLO
+        # 2. YOLO 모델을 실행하여 객체 탐지(Detection)를 수행합니다.
+        #    - model() 함수에 이미지 경로를 전달하여 실행합니다.
+        #    - conf=0.4 : 신뢰도 임계값(Confidence threshold)로, 0.4 이상만 탐지로 취급합니다.
+        #    - verbose=False 옵션으로 YOLO 내부 출력 생략(출력 깔끔하게)
+        #    결과 객체(results)는 탐지된 객체 목록(boxes 등)과 관련 정보를 포함합니다.
         results = model(temp_path, conf=0.4, verbose=False)
+        # results 예시:
+        # results[0].boxes = 탐지된 객체 각각의 박스 정보 리스트
+        # 각 box는 .xyxy (좌상단/우하단 좌표), .conf (신뢰도), .cls (클래스 인덱스) 속성을 가짐
+        # 예:
+        #   results[0].boxes[0].xyxy[0] = tensor([x1, y1, x2, y2])
+        #   results[0].boxes[0].conf[0] = tensor(0.82)   # 신뢰도
+        #   results[0].boxes[0].cls[0] = tensor(2)      # 클래스 인덱스
+        # 클래스 명칭은 model.names[클래스 인덱스]로 접근
 
         # Print detections
         if len(results[0].boxes) > 0:

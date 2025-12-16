@@ -742,10 +742,10 @@ flowchart TB
     CHECK_MIN --> RESULT[최종 검출 결과<br/>배열 반환]
     RESULT --> END([종료])
     
-    style CASCADE_1 fill:#ffcccc
-    style CASCADE_2 fill:#ffddcc
-    style CASCADE_N fill:#ffeecc
-    style NMS fill:#ccffcc
+    style CASCADE_1 fill:#ffcccc,color:#111
+    style CASCADE_2 fill:#ffddcc,color:#111
+    style CASCADE_N fill:#ffeecc,color:#111
+    style NMS fill:#ccffcc,color:#111
 ```
 
 **매개변수 상세 비교표:**
@@ -2527,7 +2527,7 @@ def stop_sign(frame, control_signals, event, r_weight, g_weight, b_weight):
 
 #### 5. 메인 루프에서의 표지판 검출 (10단계)
 
-```688:729:04_cascade/4_autoplot_harr_cascade.py
+```python
         # 표지판 검출 (스레드 사용)
         obstacle_event = threading.Event()
         stop_sign_event = threading.Event()

@@ -34,41 +34,26 @@ pip3 --version
 
 ```bash
 # 1. pip 업그레이드
-pip3 install --upgrade pip
+pip install --upgrade pip
 
 # 2. Ultralytics YOLO 설치 (자동으로 의존성 설치)
-pip3 install ultralytics
+pip install ultralytics --no-deps
 
 # 3. 추가 패키지 설치 (OpenCV 등)
-pip3 install opencv-python
+pip install opencv-python
 ```
 
 ### 방법 2: 오프라인 설치
 
 ```bash
 # 1. 의존성 패키지 먼저 설치
-pip3 install torch torchvision --no-deps
-pip3 install opencv-python pillow pyyaml numpy
+pip install torch torchvision --no-deps
+pip install opencv-python pillow pyyaml numpy
 
 # 2. Ultralytics 설치 (의존성 체크 건너뛰기)
-pip3 install ultralytics --no-deps
+pip install ultralytics --no-deps
 ```
 
-### 방법 3: 가상환경 사용 (권장)
-
-```bash
-# 1. 가상환경 생성
-python3 -m venv yolo_env
-
-# 2. 가상환경 활성화
-source yolo_env/bin/activate
-
-# 3. Ultralytics 설치
-pip install ultralytics
-
-# 4. 필요한 추가 패키지
-pip install opencv-python
-```
 
 ### 설치 확인
 

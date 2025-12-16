@@ -63,7 +63,8 @@ import os
 # ============================
 # Qt 플랫폼 플러그인 에러 방지 (Raspberry Pi)
 # ============================
-os.environ["QT_QPA_PLATFORM"] = "xcb"
+if not os.environ.get("QT_QPA_PLATFORM"):
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 # ============================
 # 1단계: 라이브러리 및 모듈 import
@@ -340,6 +341,11 @@ except Exception as e:
     sys.exit(1)
 
 setup_initial_hardware_state(bot)
+
+# ⭐ tmp 디렉토리 생성 (YOLO 임시 파일용)
+if not os.path.exists("./tmp"):
+    os.makedirs("./tmp")
+    print("Created ./tmp directory for YOLO temporary files")
 
 # ============================
 # YOLO 모델 로드
@@ -871,9 +877,14 @@ def detect_traffic_lights_yolo(frame, confidence_threshold=0.5, iou_threshold=0.
         return red_detected, green_detected, annotated_frame, detection_info
 
     try:
-        # YOLO 추론 실행
+        # ⭐ frame을 JPEG 이미지로 저장 후 YOLO 추론 실행
+        # (cv2와 YOLO 호환성 문제 해결)
+        temp_path = "./tmp/yolo_temp.jpg"
+        cv2.imwrite(temp_path, frame)
+
+        # YOLO 추론 실행 (JPEG 파일 경로 전달)
         results = yolo_model(
-            frame, conf=confidence_threshold, iou=iou_threshold, verbose=False
+            temp_path, conf=confidence_threshold, iou=iou_threshold, verbose=False
         )
 
         # 결과 처리
@@ -1549,6 +1560,12 @@ def cleanup_and_exit(bot, cap):
     cap.release()
     cv2.destroyAllWindows()
     print("Camera released")
+
+    # ⭐ YOLO 임시 파일 정리
+    temp_path = "./tmp/yolo_temp.jpg"
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+        print("YOLO temporary file removed")
 
     del bot
     print("Raspbot object deleted")

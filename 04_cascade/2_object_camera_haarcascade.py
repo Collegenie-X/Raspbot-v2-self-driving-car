@@ -198,19 +198,51 @@ def weighted_grayscale_conversion(image, r_weight, g_weight, b_weight):
 
 
 # ============================================================================
+# 감지 프레임 선택 함수
+# ============================================================================
+def get_detection_frame(frame, gray_frame, gray_rgb_frame, frame_source):
+    """
+    트랙바로 선택된 프레임 소스 반환
+
+    Args:
+        frame (numpy.ndarray): 원본 BGR 프레임
+        gray_frame (numpy.ndarray): 일반 그레이스케일 프레임
+        gray_rgb_frame (numpy.ndarray): RGB 가중치 그레이스케일 프레임
+        frame_source (int): 소스 선택 (0: 원본, 1: 그레이, 2: RGB 가중치)
+
+    Returns:
+        numpy.ndarray: 선택된 프레임
+    """
+    if frame_source == 0:
+        return frame  # 원본 BGR
+    elif frame_source == 1:
+        return gray_frame  # 일반 그레이스케일
+    elif frame_source == 2:
+        return gray_rgb_frame  # RGB 가중치 그레이스케일
+    else:
+        return frame  # 기본값: 원본
+
+
+# ============================================================================
 # 객체 감지 함수
 # ============================================================================
-def detect_objects(cascade, gray_image):
+def detect_objects(cascade, input_image):
     """
     Haar Cascade를 사용하여 객체를 감지합니다.
 
     Args:
         cascade (cv2.CascadeClassifier): 분류기 객체
-        gray_image (numpy.ndarray): 그레이스케일 이미지
+        input_image (numpy.ndarray): 입력 이미지 (컬러 또는 그레이스케일)
 
     Returns:
         numpy.ndarray: 감지된 객체의 좌표 배열 [(x, y, w, h), ...]
     """
+    # ⭐ 컬러 이미지면 그레이스케일로 변환
+    if len(input_image.shape) == 3:
+        gray_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray_image = input_image
+
     objects = cascade.detectMultiScale(
         gray_image,
         scaleFactor=SCALE_FACTOR,
@@ -223,18 +255,25 @@ def detect_objects(cascade, gray_image):
 # ============================================================================
 # 감지된 객체에 사각형과 텍스트 그리기
 # ============================================================================
-def draw_detection_results(frame, detected_objects, label):
+def draw_detection_results(display_frame, detected_objects, label, frame_source):
     """
     감지된 객체 주위에 사각형과 레이블을 그립니다.
 
     Args:
-        frame (numpy.ndarray): 원본 프레임
+        display_frame (numpy.ndarray): 표시할 프레임 (선택된 소스)
         detected_objects (numpy.ndarray): 감지된 객체 좌표
         label (str): 객체 레이블
+        frame_source (int): 프레임 소스 (0: 원본, 1: 그레이, 2: RGB 가중치)
 
     Returns:
         numpy.ndarray: 주석이 추가된 프레임
     """
+    # ⭐ 그레이스케일이면 컬러로 변환 (박스와 텍스트를 컬러로 그리기 위해)
+    if len(display_frame.shape) == 2:
+        frame = cv2.cvtColor(display_frame, cv2.COLOR_GRAY2BGR)
+    else:
+        frame = display_frame.copy()
+
     # 왼쪽 상단에 객체 이름 표시
     if len(detected_objects) > 0:
         object_name_text = f"{OBJECT_LABEL_NAME} Detected!"
@@ -465,7 +504,7 @@ def initialize_ui():
 
     # 감지 입력 소스 트랙바 (0: frame 컬러, 1: gray 그레이스케일)
     cv2.createTrackbar(
-        "Detect_Source", window_name, DETECT_SOURCE_INITIAL, 1, trackbar_callback
+        "Detect_Source", window_name, DETECT_SOURCE_INITIAL, 2, trackbar_callback
     )
 
     print("UI initialized")
@@ -567,7 +606,7 @@ def main():
     print("    * Servo angles")
     print("    * Camera settings")
     print("    * RGB weights for grayscale conversion")
-    print("    * Detect_Source: 0=Frame(Color), 1=Gray(Weighted)")
+    print("    * Detect_Source: 0=Frame(Color), 1=Gray, 2=Gray(RGB Weighted)")
     print("=" * 60)
 
     # 카메라 초기화
@@ -626,7 +665,7 @@ def main():
     window_name = initialize_ui()
 
     # 이미지 표시 윈도우 생성 (크기 조절 가능)
-    cv2.namedWindow("1__Gray_Image", cv2.WINDOW_NORMAL)
+    cv2.namedWindow("1__Origin_Frame", cv2.WINDOW_NORMAL)
     cv2.namedWindow("2__Detection_Result", cv2.WINDOW_NORMAL)
 
     # 저장 카운터 초기화
@@ -674,30 +713,40 @@ def main():
             # FPS 계산
             fps = calculate_fps(frame_counter, start_time)
 
-            # 가중치 기반 그레이스케일 변환 (먼저 수행)
-            gray = weighted_grayscale_conversion(
+            # ⭐ 3가지 프레임 준비
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # 일반 그레이스케일
+            gray_rgb_frame = weighted_grayscale_conversion(
                 frame, params["r_weight"], params["g_weight"], params["b_weight"]
+            )  # RGB 가중치 그레이스케일
+
+            # ⭐ 감지 입력 소스 선택 (0: frame, 1: gray, 2: gray_rgb)
+            detect_frame = get_detection_frame(
+                frame, gray_frame, gray_rgb_frame, params["detect_source"]
             )
 
-            # 감지 입력 소스 선택 (0: frame 컬러, 1: gray 그레이스케일)
-            if params["detect_source"] == 0:
-                detect_input = frame
-                source_name = "Frame (Color)"
-            else:
-                detect_input = gray
-                source_name = "Gray (Weighted)"
+            # 소스 이름 설정
+            source_names = {0: "Frame (Color)", 1: "Gray", 2: "Gray (RGB Weighted)"}
+            source_name = source_names.get(params["detect_source"], "Unknown")
 
             # 객체 감지
-            detected_objects = detect_objects(cascade, detect_input)
+            detected_objects = detect_objects(cascade, detect_frame)
             detected_count = len(detected_objects)
 
-            # 그레이스케일 이미지 표시
-            cv2.imshow("1__Gray_Image", gray)
+            # ⭐ 원본 프레임 표시 (항상 원본 유지)
+            cv2.imshow("1__Origin_Frame", frame)
+
+            # ⭐ 감지 결과 그리기 (선택된 프레임 사용)
+            result_frame = draw_detection_results(
+                detect_frame,
+                detected_objects,
+                OBJECT_LABEL_NAME,
+                params["detect_source"],
+            )
 
             # FPS 정보 표시 (오른쪽 하단)
             fps_text = f"FPS: {fps:.1f}"
             cv2.putText(
-                frame,
+                result_frame,
                 fps_text,
                 (CAMERA_WIDTH - 120, CAMERA_HEIGHT - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -706,10 +755,10 @@ def main():
                 2,
             )
 
-            # 감지 소스 정보 표시 (왼쪽 하단)
+            # 감지 소스 정보 표시 (왼쪽 하단, 폰트 굵기 증가)
             source_text = f"Source: {source_name}"
             cv2.putText(
-                frame,
+                result_frame,
                 source_text,
                 (10, CAMERA_HEIGHT - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -718,14 +767,8 @@ def main():
                 2,
             )
 
-            # 감지 결과 그리기
-            if detected_count > 0:
-                frame = draw_detection_results(
-                    frame, detected_objects, OBJECT_LABEL_NAME
-                )
-
-            # 프레임 표시
-            cv2.imshow("2__Detection_Result", frame)
+            # ⭐ 결과 프레임 표시
+            cv2.imshow("2__Detection_Result", result_frame)
 
             # LED Bar 및 부저 제어
             if car is not None:

@@ -315,7 +315,7 @@ yolo_dataset/
 
 ---
 
-### 6️⃣ 설정 파일 생성 (5분)
+### 5️⃣  설정 파일 생성 (5분)
 
 #### data.yaml 구조
 
@@ -381,23 +381,23 @@ names:
 #### 훈련 프로세스
 
 ```mermaid
-graph TB
+graph LR
     A[모델 초기화<br/>yolo11n.pt] --> B[데이터 로드<br/>data.yaml]
-    B --> C[에포크 시작]
-    C --> D[배치 처리]
-    D --> E[Forward Pass]
-    E --> F[Loss 계산]
-    F --> G[Backward Pass]
-    G --> H[가중치 업데이트]
+    B --> C[에포크 <br>시작]
+    C --> D[배치 <br>처리]
+    D --> E[Forward <br>Pass]
+    E --> F[Loss <br>계산]
+    F --> G[Backward <br>Pass]
+    G --> H[가중치 <br>업데이트]
     H --> I{모든 배치<br/>완료?}
     I -->|No| D
-    I -->|Yes| J[검증 세트 평가]
+    I -->|Yes| J[검증 <br>세트 <br>평가]
     J --> K{mAP 개선?}
-    K -->|Yes| L[best.pt 저장]
-    K -->|No| M[Patience 체크]
+    K -->|Yes| L[best.pt <br>저장]
+    K -->|No| M[Patience <br>체크]
     M --> N{조기<br/>종료?}
     N -->|No| C
-    N -->|Yes| O[✅ 훈련 완료]
+    N -->|Yes| O[✅ 훈련 <br>완료]
     L --> N
 ```
 

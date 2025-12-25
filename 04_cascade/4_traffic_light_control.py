@@ -242,8 +242,8 @@ print("  Loading Traffic Light Haar Cascade Classifiers...")
 print("=" * 50)
 
 # Haar Cascade models 경로 설정
-red_light_cascade_path = "./xml/stop.xml"
-green_light_cascade_path = "./xml/no_drive.xml"
+red_light_cascade_path = "./xml/red_light.xml"
+green_light_cascade_path = "./xml/green_light.xml"
 
 # Haar Cascade models 로드
 red_light_cascade = cv2.CascadeClassifier(red_light_cascade_path)

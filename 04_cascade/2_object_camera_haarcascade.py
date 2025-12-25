@@ -42,7 +42,7 @@ B_WEIGHT_INITIAL = 33
 DETECT_SOURCE_INITIAL = 0
 
 # Haar Cascade 설정
-CASCADE_FILE = "cascade.xml"
+CASCADE_FILE = "./xml/green_light.xml"
 SCALE_FACTOR = 1.1
 MIN_NEIGHBORS = 5
 MIN_SIZE = (30, 30)
@@ -52,7 +52,7 @@ SAVE_FOLDER_NAME = "detected_objects"
 SAVE_PATH_PREFIX = "./save_images"
 
 # 감지 객체 레이블
-OBJECT_LABEL_NAME = "Object"  # 감지할 객체 이름
+OBJECT_LABEL_NAME = "Green Light"  # 감지할 객체 이름
 
 # LED 설정
 LED_ON_VALUE = 1

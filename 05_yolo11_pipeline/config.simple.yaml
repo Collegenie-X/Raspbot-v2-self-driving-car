@@ -1,0 +1,88 @@
+# ===================================================================
+#  입문 수업용 설정 — 간단한 소품 3종으로 YOLO11 첫 모델 만들기
+#  (docs/00_4시간_수업자료_YOLO11_입문.md 에서 사용)
+#
+#  모든 명령에 --config config.simple.yaml 을 붙여 실행합니다.
+#    예) python scripts/01_prepare_images.py --config config.simple.yaml
+#
+#  실제 주행용 데이터(config.yaml: car/green/oo/red/xx)와 섞이지 않도록
+#  모든 경로를 simple/ 아래로 분리했습니다. 상대경로는 05_yolo11_pipeline/ 기준.
+# ===================================================================
+
+project_name: simple_yolo11
+
+# 클래스 목록 — 순서가 곧 class_id. 모든 팀이 같은 소품 세트·같은 순서를 써야
+# 4교시 '팀 교차 테스트'(다른 팀 모델로 우리 test 데이터 채점)가 가능합니다.
+# ※ 실제로 나눠 줄 소품에 맞게 이름을 바꾸세요 (영문 소문자, 수업 시작 전에 확정, 수업 중 변경 금지).
+classes:
+  - cube    # 0: 블록 / 큐브
+  - cone    # 1: 미니 라바콘
+  - ball    # 2: 공
+
+paths:
+  raw: simple/raw              # [입력] 라즈봇에서 가져온 사진 (scp -r ...:~/captures simple/raw/)
+  labeled: simple/labeled      # [1~3단계] 라벨링 작업 폴더 (images/ + labels/)
+  dataset: simple/dataset      # [4단계] train/val/test 분할 + data.yaml
+  runs: simple/runs            # [5~8단계] 학습/검증/추론 결과
+  reports: simple/reports      # 점검/검증/테스트 리포트
+  models: simple/models        # 최종 모델 (best.pt)
+
+prepare:
+  video_every_n: 10
+  max_side: 1280
+  min_side: 160
+  dedupe_hamming: 4      # 거의 같은 사진 제거 (로봇이 멈춘 채 찍힌 연속 사진)
+
+split:
+  train: 0.7
+  val: 0.2
+  test: 0.1
+  seed: 42
+  group_by_prefix: true  # 세션(폴더) 단위 분할 — 세션 10개 이상일 때 동작
+
+train:
+  model: yolo11n.pt
+  epochs: 30             # 수업 시간 안에 끝나도록 (프로젝트에서는 100)
+  imgsz: 320             # 라즈봇 운영 크기와 동일 + 640 대비 학습이 빠름
+  batch: 16
+  device: auto
+  workers: 2
+  patience: 15
+  seed: 42
+  extra:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 5.0
+    translate: 0.1
+    scale: 0.5
+    fliplr: 0.5          # 좌우 대칭 소품이라 좌우 반전 증강 허용 (O/X·신호등 수업에서는 0.0)
+    mosaic: 1.0
+    close_mosaic: 5
+
+validate:
+  imgsz: 320
+  conf: 0.001
+  iou: 0.6
+  thresholds:
+    map50: 0.80
+    map50_95: 0.50
+    precision: 0.80
+    recall: 0.80
+    per_class_map50_min: 0.60
+
+test:
+  split: test
+  imgsz: 320
+  conf: 0.5
+  match_iou: 0.5
+  max_failure_images: 30
+
+predict:
+  imgsz: 320
+  conf: 0.5
+
+export:
+  formats: [onnx, ncnn]
+  imgsz: 320
+  half: false

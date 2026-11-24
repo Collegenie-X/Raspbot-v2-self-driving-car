@@ -1,0 +1,720 @@
+{
+  "haar": {
+    "window": [
+      32,
+      24
+    ],
+    "n_stages": 4,
+    "stages": [
+      {
+        "threshold": 1.0,
+        "weak": [
+          {
+            "feature": 0,
+            "threshold": 7.91095953900367e-06,
+            "leaf": [
+              -1.0,
+              1.0
+            ]
+          }
+        ]
+      },
+      {
+        "threshold": 1.0,
+        "weak": [
+          {
+            "feature": 2,
+            "threshold": 0.6329110860824585,
+            "leaf": [
+              -1.0,
+              1.0
+            ]
+          }
+        ]
+      },
+      {
+        "threshold": 0.949999988079071,
+        "weak": [
+          {
+            "feature": 3,
+            "threshold": -0.0668058842420578,
+            "leaf": [
+              0.949999988079071,
+              -1.0
+            ]
+          }
+        ]
+      },
+      {
+        "threshold": 1.0,
+        "weak": [
+          {
+            "feature": 1,
+            "threshold": 0.012889397330582142,
+            "leaf": [
+              1.0,
+              -1.0
+            ]
+          }
+        ]
+      }
+    ],
+    "used_features": [
+      {
+        "stage": 0,
+        "rects": [
+          [
+            0.0,
+            0.0,
+            3.0,
+            18.0,
+            -1.0
+          ],
+          [
+            0.0,
+            9.0,
+            3.0,
+            9.0,
+            2.0
+          ]
+        ]
+      },
+      {
+        "stage": 1,
+        "rects": [
+          [
+            3.0,
+            0.0,
+            24.0,
+            24.0,
+            -1.0
+          ],
+          [
+            3.0,
+            8.0,
+            24.0,
+            8.0,
+            3.0
+          ]
+        ]
+      },
+      {
+        "stage": 2,
+        "rects": [
+          [
+            24.0,
+            0.0,
+            8.0,
+            16.0,
+            -1.0
+          ],
+          [
+            28.0,
+            0.0,
+            4.0,
+            16.0,
+            2.0
+          ]
+        ]
+      },
+      {
+        "stage": 3,
+        "rects": [
+          [
+            0.0,
+            5.0,
+            10.0,
+            12.0,
+            -1.0
+          ],
+          [
+            0.0,
+            9.0,
+            10.0,
+            4.0,
+            3.0
+          ]
+        ]
+      }
+    ],
+    "n_windows_320x240": 110364,
+    "n_scales": 25,
+    "n_features_total": 4
+  },
+  "yolo_raw_shape": [
+    1,
+    6,
+    2100
+  ],
+  "feature_maps": [
+    {
+      "layer": 0,
+      "shape": [
+        16,
+        160,
+        160
+      ]
+    },
+    {
+      "layer": 2,
+      "shape": [
+        64,
+        80,
+        80
+      ]
+    },
+    {
+      "layer": 4,
+      "shape": [
+        128,
+        40,
+        40
+      ]
+    },
+    {
+      "layer": 6,
+      "shape": [
+        128,
+        20,
+        20
+      ]
+    }
+  ],
+  "nms": {
+    "raw_candidates": 10,
+    "final": 1,
+    "raw_conf": [
+      0.957,
+      0.914,
+      0.878,
+      0.868,
+      0.79,
+      0.754,
+      0.57,
+      0.494,
+      0.234,
+      0.206
+    ],
+    "final_det": [
+      [
+        "xx",
+        0.96
+      ]
+    ]
+  },
+  "yolo_params": 2605126,
+  "label_tool": {
+    "frames": 26,
+    "log": [
+      "start",
+      "key 0",
+      "drag 1",
+      "drag 2",
+      "drag 3",
+      "drag 4",
+      "drag 5",
+      "drag 6",
+      "box done",
+      "key 0",
+      "drag 1",
+      "drag 2",
+      "drag 3",
+      "drag 4",
+      "drag 5",
+      "drag 6",
+      "box done",
+      "key 3",
+      "drag 1",
+      "drag 2",
+      "drag 3",
+      "drag 4",
+      "drag 5",
+      "drag 6",
+      "box done",
+      "saved"
+    ],
+    "saved_txt": "0 0.640625 0.529167 0.137500 0.141667\n0 0.162500 0.255208 0.237500 0.243750\n3 0.260937 0.776042 0.087500 0.114583\n"
+  },
+  "stream": [
+    {
+      "i": 0,
+      "file": "traffic_sign_0.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 38.9,
+      "count": 1
+    },
+    {
+      "i": 1,
+      "file": "traffic_sign_1.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 13.6,
+      "count": 2
+    },
+    {
+      "i": 2,
+      "file": "traffic_sign_2.jpg",
+      "present": true,
+      "fired": true,
+      "ms": 11.7,
+      "count": 3
+    },
+    {
+      "i": 3,
+      "file": "traffic_sign_3.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.9,
+      "count": 4
+    },
+    {
+      "i": 4,
+      "file": "traffic_sign_4.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.8,
+      "count": 5
+    },
+    {
+      "i": 5,
+      "file": "traffic_sign_5.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.6,
+      "count": 6
+    },
+    {
+      "i": 6,
+      "file": "traffic_sign_6.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.3,
+      "count": 7
+    },
+    {
+      "i": 7,
+      "file": "traffic_sign_7.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.0,
+      "count": 8
+    },
+    {
+      "i": 8,
+      "file": "traffic_sign_8.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.7,
+      "count": 9
+    },
+    {
+      "i": 9,
+      "file": "traffic_sign_9.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.6,
+      "count": 10
+    },
+    {
+      "i": 10,
+      "file": "traffic_sign_10.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.0,
+      "count": 11
+    },
+    {
+      "i": 11,
+      "file": "traffic_sign_11.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.0,
+      "count": 12
+    },
+    {
+      "i": 12,
+      "file": "traffic_sign_12.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.7,
+      "count": 13
+    },
+    {
+      "i": 13,
+      "file": "traffic_sign_13.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.6,
+      "count": 14
+    },
+    {
+      "i": 14,
+      "file": "traffic_sign_14.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.9,
+      "count": 15
+    },
+    {
+      "i": 15,
+      "file": "traffic_sign_15.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.1,
+      "count": 16
+    },
+    {
+      "i": 16,
+      "file": "traffic_sign_16.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.8,
+      "count": 17
+    },
+    {
+      "i": 17,
+      "file": "traffic_sign_17.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.2,
+      "count": 18
+    },
+    {
+      "i": 18,
+      "file": "traffic_sign_18.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.7,
+      "count": 19
+    },
+    {
+      "i": 19,
+      "file": "traffic_sign_19.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.2,
+      "count": 20
+    },
+    {
+      "i": 20,
+      "file": "traffic_sign_20.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.1,
+      "count": 21
+    },
+    {
+      "i": 21,
+      "file": "traffic_sign_21.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.1,
+      "count": 22
+    },
+    {
+      "i": 22,
+      "file": "traffic_sign_22.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.7,
+      "count": 23
+    },
+    {
+      "i": 23,
+      "file": "traffic_sign_23.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.4,
+      "count": 24
+    },
+    {
+      "i": 24,
+      "file": "traffic_sign_24.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.7,
+      "count": 25
+    },
+    {
+      "i": 25,
+      "file": "traffic_sign_25.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.1,
+      "count": 26
+    },
+    {
+      "i": 26,
+      "file": "traffic_sign_26.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.2,
+      "count": 27
+    },
+    {
+      "i": 27,
+      "file": "traffic_sign_27.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.9,
+      "count": 28
+    },
+    {
+      "i": 28,
+      "file": "traffic_sign_28.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.9,
+      "count": 29
+    },
+    {
+      "i": 29,
+      "file": "traffic_sign_29.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.6,
+      "count": 30
+    },
+    {
+      "i": 30,
+      "file": "traffic_sign_30.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.7,
+      "count": 31
+    },
+    {
+      "i": 31,
+      "file": "traffic_sign_31.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.1,
+      "count": 32
+    },
+    {
+      "i": 32,
+      "file": "traffic_sign_32.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.4,
+      "count": 33
+    },
+    {
+      "i": 33,
+      "file": "traffic_sign_33.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.6,
+      "count": 34
+    },
+    {
+      "i": 34,
+      "file": "traffic_sign_34.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 11.6,
+      "count": 35
+    },
+    {
+      "i": 35,
+      "file": "traffic_sign_35.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.0,
+      "count": 36
+    },
+    {
+      "i": 36,
+      "file": "traffic_sign_36.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.0,
+      "count": 37
+    },
+    {
+      "i": 37,
+      "file": "traffic_sign_37.jpg",
+      "present": true,
+      "fired": false,
+      "ms": 12.4,
+      "count": 38
+    },
+    {
+      "i": 38,
+      "file": "traffic_sign_38.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 12.5,
+      "count": 0
+    },
+    {
+      "i": 39,
+      "file": "traffic_sign_39.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 12.4,
+      "count": 0
+    },
+    {
+      "i": 40,
+      "file": "traffic_sign_40.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 12.0,
+      "count": 0
+    },
+    {
+      "i": 41,
+      "file": "traffic_sign_41.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.8,
+      "count": 0
+    },
+    {
+      "i": 42,
+      "file": "traffic_sign_42.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 12.0,
+      "count": 0
+    },
+    {
+      "i": 43,
+      "file": "traffic_sign_43.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.6,
+      "count": 0
+    },
+    {
+      "i": 44,
+      "file": "traffic_sign_44.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.9,
+      "count": 0
+    },
+    {
+      "i": 45,
+      "file": "traffic_sign_45.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.9,
+      "count": 0
+    },
+    {
+      "i": 46,
+      "file": "traffic_sign_46.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.7,
+      "count": 0
+    },
+    {
+      "i": 47,
+      "file": "traffic_sign_47.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.6,
+      "count": 0
+    },
+    {
+      "i": 48,
+      "file": "traffic_sign_48.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 12.3,
+      "count": 0
+    },
+    {
+      "i": 49,
+      "file": "traffic_sign_49.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.6,
+      "count": 0
+    },
+    {
+      "i": 50,
+      "file": "traffic_sign_50.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.6,
+      "count": 0
+    },
+    {
+      "i": 51,
+      "file": "traffic_sign_51.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.7,
+      "count": 0
+    },
+    {
+      "i": 52,
+      "file": "traffic_sign_52.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.2,
+      "count": 0
+    },
+    {
+      "i": 53,
+      "file": "traffic_sign_53.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.1,
+      "count": 0
+    },
+    {
+      "i": 54,
+      "file": "traffic_sign_54.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.6,
+      "count": 0
+    },
+    {
+      "i": 55,
+      "file": "traffic_sign_55.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.3,
+      "count": 0
+    },
+    {
+      "i": 56,
+      "file": "traffic_sign_56.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.7,
+      "count": 0
+    },
+    {
+      "i": 57,
+      "file": "traffic_sign_57.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 12.0,
+      "count": 0
+    },
+    {
+      "i": 58,
+      "file": "traffic_sign_58.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.8,
+      "count": 0
+    },
+    {
+      "i": 59,
+      "file": "traffic_sign_59.jpg",
+      "present": false,
+      "fired": false,
+      "ms": 11.7,
+      "count": 0
+    }
+  ]
+}

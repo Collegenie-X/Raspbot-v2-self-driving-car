@@ -1,0 +1,91 @@
+# ===================================================================
+#  YOLO11 학습 파이프라인 설정 (모든 스크립트가 이 파일을 읽습니다)
+#  상대경로는 09_yolo11_pipeline/ 폴더 기준입니다.
+# ===================================================================
+
+project_name: raspbot_yolo11
+
+# 클래스 목록 — 순서가 곧 class_id (0,1,2,...) 입니다. 학습 후에는 순서를 바꾸지 마세요.
+# (source/models/yolo/best.pt 와 동일한 5개 클래스)
+classes:
+  - car     # 0: 앞 차량(장애물)
+  - green   # 1: 초록 신호등
+  - oo      # 2: O 표지판
+  - red     # 3: 빨간 신호등
+  - xx      # 4: X 표지판
+
+paths:
+  raw: data/raw              # [입력] 수집한 원본 사진/동영상
+  labeled: data/labeled      # [1~3단계] 라벨링 작업 폴더 (images/ + labels/)
+  dataset: datasets/raspbot  # [4단계] train/val/test 로 분할된 학습용 데이터셋
+  runs: runs                 # [5~8단계] Ultralytics 학습/검증 결과
+  reports: reports           # 점검/검증/테스트 리포트 (.md / .json / 이미지)
+  models: models             # 최종 모델 (best.pt, 변환 모델)
+
+# ---------------------- 1단계: 수집 데이터 정리 ----------------------
+prepare:
+  video_every_n: 10      # 동영상에서 N프레임마다 1장 추출
+  max_side: 1280         # 긴 변이 이보다 크면 축소
+  min_side: 160          # 이보다 작은 이미지는 제외
+  dedupe_hamming: 4      # dHash 해밍거리 ≤ 이 값이면 중복으로 보고 제외 (0=끄기)
+
+# ---------------------- 4단계: 데이터셋 분할 -------------------------
+split:
+  train: 0.7
+  val: 0.2
+  test: 0.1
+  seed: 42
+  group_by_prefix: true  # 같은 동영상에서 나온 프레임은 같은 split 으로 (데이터 누수 방지)
+
+# ---------------------- 5단계: 학습 ---------------------------------
+train:
+  model: yolo11n.pt      # yolo11n(가장 빠름, Pi 권장) / yolo11s / yolo11m ...
+  epochs: 100
+  imgsz: 640
+  batch: 16              # GPU 메모리 부족 시 8 또는 -1(자동)
+  device: auto           # auto(CUDA 있으면 GPU, 없으면 CPU) / cpu / mps / 0 (CUDA GPU 번호)
+  workers: 4
+  patience: 30           # N epoch 동안 개선 없으면 조기 종료
+  seed: 42
+  # Ultralytics train() 에 그대로 전달되는 추가 인자 (증강 등)
+  extra:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 5.0
+    translate: 0.1
+    scale: 0.5
+    fliplr: 0.0          # 좌/우 의미가 있는 표지판이면 0 (O/X, 신호등은 0 권장)
+    mosaic: 1.0
+    close_mosaic: 10
+
+# ---------------------- 6단계: 검증 (mAP) ---------------------------
+validate:
+  imgsz: 640
+  conf: 0.001            # mAP 계산용 (낮게 두는 것이 표준)
+  iou: 0.6
+  thresholds:            # 합격 기준 — 하나라도 미달이면 FAIL
+    map50: 0.80
+    map50_95: 0.50
+    precision: 0.80
+    recall: 0.80
+    per_class_map50_min: 0.60
+
+# ---------------------- 7단계: 테스트 (실사용 조건) ------------------
+test:
+  split: test
+  imgsz: 320             # 라즈베리파이 운영 조건과 동일하게
+  conf: 0.5              # source/configs 의 perception.yolo.conf 와 동일
+  match_iou: 0.5         # GT 와 예측 박스 매칭 기준
+  max_failure_images: 50
+
+# ---------------------- 8단계: 추론 -------------------------------
+predict:
+  imgsz: 320
+  conf: 0.5
+
+# ---------------------- 9단계: 변환(배포) ---------------------------
+export:
+  formats: [onnx, ncnn]  # 라즈베리파이 CPU 에서는 ncnn 이 가장 빠름
+  imgsz: 320
+  half: false

@@ -1,0 +1,27 @@
+# ===============================================================
+#  YOLO11 학습 파이프라인 — PC / Colab (라벨링·학습·검증·테스트·변환)
+#  설치:  pip install --prefer-binary -r requirements.txt
+#  Python 3.9 ~ 3.12 권장 (3.13+ 는 PyTorch 지원 여부 확인)
+# ===============================================================
+
+# --- 핵심: YOLO11 (PyTorch, torchvision, matplotlib, pandas 등 자동 설치) ---
+ultralytics>=8.3.0
+
+# --- 이미지 처리 / 설정 ---
+# OpenCV 5.x 는 cv2.CascadeClassifier(Haar)가 빠져 있고, 일부 환경에서 소스 빌드로 설치가 매우 느림 → 4.x 고정
+opencv-python>=4.8.0,<5
+numpy>=1.23.0
+PyYAML>=6.0
+
+# --- 9단계: 배포용 변환 (ONNX / NCNN) ---
+onnx>=1.15.0
+onnxslim>=0.1.31
+onnxruntime>=1.16.0
+ncnn>=1.0.20240410
+
+# --- (선택) GPU 학습: CUDA 버전에 맞는 PyTorch 를 먼저 설치하세요 ---
+#   https://pytorch.org/get-started/locally/
+#   예) pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# --- (선택) 웹 기반 라벨링 도구 (클래스가 많거나 여러 명이 라벨링할 때) ---
+# label-studio>=1.12

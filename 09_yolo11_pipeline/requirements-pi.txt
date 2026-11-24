@@ -1,0 +1,11 @@
+# ===============================================================
+#  라즈베리파이 5 (64-bit OS) — 추론 전용 (8단계 08_predict.py, source/ 주행 코드)
+#  설치:  pip install --prefer-binary -r requirements-pi.txt
+#  (학습은 PC/Colab 에서 하고 models/ 만 복사해 오세요)
+# ===============================================================
+ultralytics>=8.3.0
+opencv-python>=4.8.0
+numpy>=1.23.0
+PyYAML>=6.0
+ncnn>=1.0.20240410        # best_ncnn_model 사용 시 (가장 빠름)
+# onnxruntime>=1.16.0     # best.onnx 사용 시

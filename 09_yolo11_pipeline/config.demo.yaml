@@ -1,0 +1,38 @@
+# 데모(가상 데이터) 전용 설정 — run_pipeline.py --demo 가 사용
+# 실제 데이터와 섞이지 않도록 모든 경로를 demo/ 아래로 분리했습니다.
+
+project_name: demo_yolo11
+classes: [car, green, oo, red, xx]
+
+paths:
+  raw: demo/raw
+  labeled: demo/labeled
+  dataset: demo/dataset
+  runs: demo/runs
+  reports: demo/reports
+  models: demo/models
+
+prepare: {video_every_n: 10, max_side: 1280, min_side: 160, dedupe_hamming: 0}
+
+split: {train: 0.7, val: 0.2, test: 0.1, seed: 42, group_by_prefix: false}
+
+train:
+  model: yolo11n.pt
+  epochs: 15
+  imgsz: 320
+  batch: 16
+  device: auto
+  workers: 2
+  patience: 15
+  seed: 42
+  extra: {fliplr: 0.0, mosaic: 1.0, close_mosaic: 3}
+
+validate:
+  imgsz: 320
+  conf: 0.001
+  iou: 0.6
+  thresholds: {map50: 0.5, map50_95: 0.3, precision: 0.5, recall: 0.5, per_class_map50_min: 0.3}
+
+test: {split: test, imgsz: 320, conf: 0.5, match_iou: 0.5, max_failure_images: 20}
+predict: {imgsz: 320, conf: 0.5}
+export: {formats: [onnx], imgsz: 320, half: false}

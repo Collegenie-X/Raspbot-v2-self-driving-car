@@ -1,0 +1,11 @@
+# 데이터 / 실험 산출물 (용량이 크므로 Git 에 올리지 않음)
+data/
+datasets/
+runs/
+reports/
+demo/
+*.cache
+yolo11*.pt
+models/*_ncnn_model/
+models/*.onnx
+__pycache__/

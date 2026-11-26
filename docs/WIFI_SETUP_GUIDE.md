@@ -1,5 +1,78 @@
 # 라즈베리 파이 와이파이 설정 가이드 (AP 모드 해제 및 외부 공유기 연결)
 
+## 0. 가장 쉬운 방법: `wifi_setup.sh` (메뉴에서 번호만 고르기)
+
+> **`sudo wpa_cli -i wlan0 reconfigure` 가 `FAIL` 이 나오나요?**
+> Raspberry Pi OS **Bookworm** 부터는 Wi‑Fi 를 **NetworkManager** 가 관리하므로
+> `/etc/wpa_supplicant/wpa_supplicant.conf` 를 고쳐도 반영되지 않습니다.
+> 아래 스크립트를 쓰면 SSID 를 쉽게 추가할 수 있습니다.
+
+### ① 스크립트를 라즈베리 파이로 복사 (내 PC/Mac 에서 실행 — **반드시 먼저!**)
+
+```bash
+scp tools/wifi_setup.sh pi@pi.local:~/
+```
+
+> `pi.local` 이 안 되면 Pi 의 IP 로 바꿔서 입력 (예: `pi@192.168.1.11`).
+> 복사 전에 ②를 실행하면 `No such file or directory` 가 나옵니다.
+
+### ② 라즈베리 파이에 접속해서 실행
+
+```bash
+ssh pi@pi.local
+```
+
+```bash
+sudo bash ~/wifi_setup.sh
+```
+
+> 프롬프트가 `pi@pi:~ $` 인지 확인하세요. Mac 프롬프트에서 실행하면 Mac 비밀번호를 묻고 동작하지 않습니다.
+
+```
+==========  Raspbot Wi-Fi 간편 설정  ==========
+ 장치       : wlan0
+ 상태       : 100 (connected)
+ 연결 프로필: edu22
+ IP 주소    : 192.168.1.11/24
+✔ 인터넷 연결 정상
+ 1) 주변 Wi-Fi 검색해서 추가   ← 처음이면 이것
+ 2) 저장된 Wi-Fi 목록 보기
+ 3) 저장된 Wi-Fi 로 지금 전환
+ 4) 우선순위 바꾸기
+ 5) 저장된 Wi-Fi 삭제
+ 6) 예전 wpa_supplicant.conf 내용 가져오기
+ 7) 핫스팟(AP) 자동 시작 켜기/끄기
+ q) 종료
+```
+
+**1번** → 주변 Wi‑Fi 목록에서 번호 선택 → 비밀번호 입력(2번) → 우선순위 입력(Enter 면 10) → 끝.
+
+- **SSH 로 접속 중이어도 안전합니다.** 기본은 "저장만" 하고 지금 연결은 끊지 않습니다.
+  재부팅하면 우선순위가 높은 Wi‑Fi 부터 자동 연결됩니다.
+- 지금 바로 전환하면 SSH 가 끊어집니다. 새 네트워크에서 `ssh pi@<호스트이름>.local` 로 다시 접속하세요.
+- 숨김 SSID 는 목록에서 `h` 를 눌러 직접 입력합니다.
+- 이미 `wpa_supplicant.conf` 에 `network={...}` 를 적어 두었다면 **6번** 으로 한 번에 옮길 수 있습니다
+  (`disabled=1` → 자동연결 꺼짐, `priority=` → 우선순위 로 그대로 변환).
+
+### 한 줄 명령으로 쓰기 (수업 중 일괄 설정용)
+
+```bash
+sudo bash ~/wifi_setup.sh add "edu" "12345678" 20
+```
+
+```bash
+sudo bash ~/wifi_setup.sh list
+```
+
+| 예전 `wpa_supplicant.conf` | 지금 (NetworkManager) |
+| :--- | :--- |
+| `network={ ssid=... psk=... }` 추가 | `wifi_setup.sh add "SSID" "비밀번호"` |
+| `disabled=1` | `sudo nmcli connection modify 이름 connection.autoconnect no` (아예 지우려면 메뉴 5) |
+| `priority=5` | 우선순위 (숫자 클수록 먼저) |
+| `wpa_cli -i wlan0 reconfigure` | 필요 없음 (저장 즉시 반영, 전환은 메뉴 3) |
+
+---
+
 ## 1. 설정 흐름도 (Flowchart)
 
 ```mermaid
